@@ -108,10 +108,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -168,10 +168,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -306,10 +306,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -366,10 +366,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -628,10 +628,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -766,10 +766,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -982,10 +982,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -1042,10 +1042,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {
@@ -1180,10 +1180,10 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
+            "drawStyle": "bars",
             "lineInterpolation": "smooth",
             "lineWidth": 1,
-            "fillOpacity": 12,
+            "fillOpacity": 80,
             "showPoints": "never",
             "spanNulls": true,
             "stacking": {

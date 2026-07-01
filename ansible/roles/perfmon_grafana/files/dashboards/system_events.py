@@ -22,6 +22,7 @@ def system_events():
                     "SELECT time = sh.collection_time, bad_pages_detected = CONVERT(float, sh.BadPagesDetected), bad_pages_fixed = CONVERT(float, sh.BadPagesFixed), interval_dump_requests = CONVERT(float, sh.intervalDumpRequests) FROM collect.HealthParser_SystemHealth AS sh WHERE $__timeFilter(sh.collection_time) ORDER BY sh.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
@@ -36,6 +37,7 @@ def system_events():
                     "SELECT time = sh.collection_time, access_violation_occurred = CONVERT(float, sh.isAccessViolationOccurred), write_access_violations = CONVERT(float, sh.writeAccessViolationCount) FROM collect.HealthParser_SystemHealth AS sh WHERE $__timeFilter(sh.collection_time) ORDER BY sh.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
@@ -88,6 +90,7 @@ ORDER BY sh.collection_time DESC;
                     "SELECT time = sh.collection_time, non_yielding_tasks = CONVERT(float, sh.nonYieldingTasksReported), latch_warnings = CONVERT(float, sh.latchWarnings), spinlock_backoffs = CONVERT(float, sh.spinlockBackoffs) FROM collect.HealthParser_SystemHealth AS sh WHERE $__timeFilter(sh.collection_time) ORDER BY sh.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
@@ -104,6 +107,7 @@ ORDER BY sh.collection_time DESC;
             ],
             unit="percent",
             max_=100,
+            bars=True,
         )
     )
 
@@ -175,6 +179,7 @@ ORDER BY se.collection_time DESC;
                     "SELECT time = io.collection_time, io_latch_timeouts = io.ioLatchTimeouts, interval_long_ios = io.intervalLongIos FROM collect.HealthParser_IOIssues AS io WHERE $__timeFilter(io.collection_time) ORDER BY io.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
@@ -217,6 +222,7 @@ ORDER BY io.collection_time DESC;
                 )
             ],
             unit="ms",
+            bars=True,
         )
     )
     panels.append(
@@ -301,6 +307,7 @@ ORDER BY mc.collection_time DESC;
                     "SELECT time = ct.collection_time, workers_created = ct.workersCreated, workers_idle = ct.workersIdle, max_workers = ct.maxWorkers FROM collect.HealthParser_CPUTasks AS ct WHERE $__timeFilter(ct.collection_time) ORDER BY ct.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
@@ -316,6 +323,7 @@ ORDER BY mc.collection_time DESC;
                 )
             ],
             unit="ms",
+            bars=True,
         )
     )
     panels.append(
@@ -360,6 +368,7 @@ ORDER BY ct.collection_time DESC;
                     "SELECT time = mb.collection_time, metric = mb.broker, value = CONVERT(float, mb.currently_allocated) FROM collect.HealthParser_MemoryBroker AS mb WHERE $__timeFilter(mb.collection_time) ORDER BY mb.collection_time;"
                 )
             ],
+            bars=True,
         )
     )
     panels.append(
