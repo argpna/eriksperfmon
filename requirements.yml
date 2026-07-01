@@ -1,0 +1,5 @@
+---
+collections:
+  - name: ansible.posix
+  - name: community.grafana
+    version: ">=2.1.0"
