@@ -1,0 +1,113 @@
+---
+# Remove all resources provisioned by this role, in reverse provisioning order.
+# Run --tags teardown for full removal, or a specific sub-tag for selective removal:
+# teardown_alerting, teardown_datasources, teardown_dashboards
+
+- name: Remove perfmon notification policy route
+  ansible.builtin.command:
+    cmd: >-
+      python3 {{ role_path }}/files/upsert_notification_route.py
+      --grafana-url {{ grafana_url }}
+      --remove
+  environment:
+    GRAFANA_API_KEY: "{{ grafana_api_key }}"
+  changed_when: false
+  delegate_to: localhost
+  # no_log: true
+  tags: teardown_alerting
+
+- name: Get all mute timings
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/v1/provisioning/mute-timings"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200]
+  register: _teardown_mute_timings
+  delegate_to: localhost
+  tags: teardown_alerting
+
+- name: Remove all perfmon mute timings
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/v1/provisioning/mute-timings/{{ item | urlencode }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200, 204, 404]
+  loop: "{{ _teardown_mute_timings.json | selectattr('name', 'match', '^perfmon-') | map(attribute='name') | list }}"
+  loop_control:
+    label: "{{ item }}"
+  changed_when: false
+  delegate_to: localhost
+  tags: teardown_alerting
+
+- name: Get provisioned alert rules in perfmon folder
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/v1/provisioning/alert-rules"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200]
+  register: _teardown_alert_rules
+  delegate_to: localhost
+  tags: teardown_alerting
+
+- name: Remove alert rule groups in perfmon folder
+  ansible.builtin.uri:
+    url: >-
+      {{ grafana_url }}/api/v1/provisioning/folder/{{ grafana_folder_uid
+      }}/rule-groups/{{ item | urlencode }}
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200, 202, 204, 404]
+  loop: >-
+    {{ _teardown_alert_rules.json
+       | selectattr('folderUID', 'equalto', grafana_folder_uid)
+       | map(attribute='ruleGroup')
+       | unique | list }}
+  loop_control:
+    label: "{{ item }}"
+  changed_when: false
+  delegate_to: localhost
+  tags: teardown_alerting
+
+- name: Remove contact points
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/v1/provisioning/contact-points/{{ item.uid }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200, 202, 204, 404]
+  loop: "{{ perfmon_alert_contact_points }}"
+  loop_control:
+    label: "{{ item.uid }}"
+  changed_when: false
+  delegate_to: localhost
+  # no_log: true
+  tags: teardown_alerting
+
+- name: Remove datasources
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/datasources/uid/{{ perfmon_ds_uid_prefix }}-{{ item.inventory_hostname }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200, 204, 404]
+  loop: "{{ perfmon_instances }}"
+  loop_control:
+    label: "{{ item.inventory_hostname }}"
+  changed_when: false
+  delegate_to: localhost
+  # no_log: true
+  tags: teardown_datasources
+
+- name: Remove PerformanceMonitor folder and all dashboards
+  community.grafana.grafana_folder:
+    grafana_url: "{{ grafana_url }}"
+    grafana_api_key: "{{ grafana_api_key }}"
+    title: "{{ grafana_folder }}"
+    uid: "{{ grafana_folder_uid }}"
+    state: absent
+  delegate_to: localhost
+  tags: teardown_dashboards

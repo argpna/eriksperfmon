@@ -1,0 +1,205 @@
+---
+# Run PerformanceMonitor upgrade scripts for the version gap between the currently
+# installed version from config.installation_history and the target version.
+
+- name: Check if PerformanceMonitor database exists
+  ansible.builtin.command: >
+    {{ sqlcmd_bin }}
+    -S {{ _mssql_server }}
+    -U {{ mssql_sa_user }}
+    -P "{{ mssql_sa_password }}"
+    -C -h -1 -W
+    -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = N'{{ perfmon_db }}';"
+  register: _perfmon_db_check
+  delegate_to: localhost
+  changed_when: false
+  failed_when: false
+
+- name: Set database-exists flag
+  ansible.builtin.set_fact:
+    _perfmon_db_exists: "{{ _perfmon_db_check.stdout | trim | int > 0 }}"
+
+- name: Read installed version from installation_history
+  ansible.builtin.command: >
+    {{ sqlcmd_bin }}
+    -S {{ _mssql_server }}
+    -U {{ mssql_sa_user }}
+    -P "{{ mssql_sa_password }}"
+    -d "{{ perfmon_db }}"
+    -C -h -1 -W
+    -Q "SET NOCOUNT ON;
+        SELECT TOP(1) LTRIM(RTRIM(installer_version))
+        FROM config.installation_history
+        WHERE installation_status = N'SUCCESS'
+        ORDER BY installation_date DESC;"
+  register: _installed_version_raw
+  delegate_to: localhost
+  run_once: true
+  changed_when: false
+  failed_when: false
+  when: _perfmon_db_exists | bool
+
+- name: Initialize installed version to empty
+  ansible.builtin.set_fact:
+    _installed_version_clean: ""
+  run_once: true
+
+- name: Set installed version
+  ansible.builtin.set_fact:
+    _installed_version_clean: >-
+      {{ _installed_version_raw.stdout | trim | regex_replace('^v', '') }}
+  run_once: true
+  when:
+    - _perfmon_db_exists | bool
+    - not (_installed_version_raw.skipped | default(false) | bool)
+    - _installed_version_raw.stdout | default('') | trim | length > 0
+
+- name: Determine if upgrades are needed
+  ansible.builtin.set_fact:
+    _upgrade_needed: >-
+      {{
+        _perfmon_db_exists | bool
+        and _installed_version_clean | length > 0
+        and _installed_version_clean is version(_perfmon_version_clean, '<')
+      }}
+  run_once: true
+
+- name: Set already-at-target flag
+  ansible.builtin.set_fact:
+    _at_target_version: >-
+      {{
+        _perfmon_db_exists | bool
+        and _installed_version_clean | length > 0
+        and _installed_version_clean is version(_perfmon_version_clean, '==')
+      }}
+  run_once: true
+
+- name: Reject downgrade attempt
+  ansible.builtin.fail:
+    msg: >-
+      Downgrade not supported: installed version {{ _installed_version_clean }} is newer than
+      target {{ _perfmon_version_clean }}. Set perfmon_version to {{ _installed_version_clean }}
+      or higher. There are no rollback scripts upstream.
+  when:
+    - _perfmon_db_exists | bool
+    - _installed_version_clean | length > 0
+    - _installed_version_clean is version(_perfmon_version_clean, '>')
+  run_once: true
+
+- name: Gather upgrade script directories
+  ansible.builtin.find:
+    paths: "{{ _perfmon_upgrades_dir }}"
+    file_type: directory
+  register: _upgrade_dir_find
+  delegate_to: localhost
+  run_once: true
+  when: _upgrade_needed | bool
+
+- name: Gather upgrade SQL scripts per directory
+  ansible.builtin.find:
+    paths: "{{ item.path }}"
+    patterns: "*.sql"
+    file_type: file
+  loop: "{{ _upgrade_dir_find.files | default([]) | sort(attribute='path') }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: _upgrade_script_finds
+  delegate_to: localhost
+  run_once: true
+  when: _upgrade_needed | bool
+
+- name: Build ordered upgrade script list filtered to applicable version range
+  ansible.builtin.set_fact:
+    _upgrade_scripts_raw: >-
+      {%- if _upgrade_needed | bool -%}
+        {%- set ns = namespace(scripts=[]) -%}
+        {%- for result in _upgrade_script_finds.results | default([]) | selectattr('files', 'defined') -%}
+          {%- set dir_name = result.item.path | basename -%}
+          {%- set from_ver = dir_name | regex_replace('-to-.*', '') -%}
+          {%- set to_ver = dir_name | regex_replace('.*-to-', '') -%}
+          {%- if from_ver is version(_installed_version_clean, '>=') and to_ver is version(_perfmon_version_clean, '<=') -%}
+            {%- for f in result.files | sort(attribute='path') -%}
+              {%- set _ = ns.scripts.append(f.path) -%}
+            {%- endfor -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {{ ns.scripts }}
+      {%- else -%}
+        []
+      {%- endif -%}
+  delegate_to: localhost
+  run_once: true
+
+- name: Parse upgrade script list into a native list
+  ansible.builtin.set_fact:
+    _upgrade_scripts: "{{ _upgrade_scripts_raw | trim | from_yaml }}"
+  delegate_to: localhost
+  run_once: true
+
+- name: Run upgrade scripts and record result
+  when: _upgrade_needed | bool
+  block:
+    - name: Run upgrade scripts
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d master
+        -C -b
+        -i "{{ item }}"
+      loop: "{{ _upgrade_scripts }}"
+      loop_control:
+        label: "{{ item | basename }}"
+      delegate_to: localhost
+      changed_when: true
+
+    - name: Record successful upgrade in installation_history
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d "{{ perfmon_db }}"
+        -C -b
+        -Q "INSERT INTO config.installation_history
+                (installer_version, installer_info_version, sql_server_version,
+                 sql_server_edition, installation_type, previous_version,
+                 installation_status, files_executed, files_failed)
+            VALUES
+                (N'{{ _perfmon_version_clean }}', N'ansible',
+                 @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
+                 N'UPGRADE', N'{{ _installed_version_clean }}', N'SUCCESS',
+                 {{ _upgrade_scripts | length }}, 0);"
+      delegate_to: localhost
+      changed_when: true
+
+  rescue:
+    - name: Record failed upgrade in installation_history
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d "{{ perfmon_db }}"
+        -C -b
+        -Q "IF OBJECT_ID(N'config.installation_history') IS NOT NULL
+            INSERT INTO config.installation_history
+                (installer_version, installer_info_version, sql_server_version,
+                 sql_server_edition, installation_type, previous_version,
+                 installation_status, files_executed, files_failed)
+            VALUES
+                (N'{{ _perfmon_version_clean }}', N'ansible',
+                 @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
+                 N'UPGRADE', N'{{ _installed_version_clean }}', N'FAILED',
+                 0, 1);"
+      delegate_to: localhost
+      changed_when: true
+      failed_when: false
+
+    - name: Fail after recording upgrade failure
+      ansible.builtin.fail:
+        msg: >-
+          Upgrade from {{ _installed_version_clean }} to {{ _perfmon_version_clean }} failed.
+          Recorded FAILED status in config.installation_history.
+          Fix the error above and re-run; the next run will retry the upgrade.

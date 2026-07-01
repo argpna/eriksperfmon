@@ -1,0 +1,760 @@
+{
+  "uid": "perfmon-query-history",
+  "title": "PerfMon · Query History",
+  "tags": [
+    "perfmon-detail",
+    "nav-only"
+  ],
+  "timezone": "",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "",
+  "weekStart": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Fleet Overview",
+      "icon": "dashboard",
+      "type": "link",
+      "url": "/d/perfmon-fleet?${__url_time_range}",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "perfmon"
+      ],
+      "targetBlank": false,
+      "title": "All PerfMon Dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "datasource",
+        "query": "mssql",
+        "regex": "/^PerfMon-/",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
+      },
+      {
+        "name": "database",
+        "label": "Database",
+        "type": "textbox",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "hide": 0
+      },
+      {
+        "name": "query_hash",
+        "label": "Query Hash",
+        "type": "textbox",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "options": [],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "CPU & Elapsed Time",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CPU per collection interval",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time), cpu_ms = SUM(qs.total_worker_time_delta) / 1000.0\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Elapsed time per collection interval",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time), elapsed_ms = SUM(qs.total_elapsed_time_delta) / 1000.0\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "I/O & Executions",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Execution count per collection interval",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time), executions = SUM(qs.execution_count_delta)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Logical reads per collection interval",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time), logical_reads = SUM(qs.total_logical_reads_delta)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Physical reads & logical writes per interval",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT\n    time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time),\n    physical_reads = SUM(qs.total_physical_reads_delta),\n    logical_writes = SUM(qs.total_logical_writes_delta)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Resource Usage",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Rows returned (min/max per snapshot)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT\n    time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time),\n    min_rows = MIN(qs.min_rows),\n    max_rows = MAX(qs.max_rows)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Degree of parallelism (min/max per snapshot)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT\n    time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time),\n    min_dop = MIN(qs.min_dop),\n    max_dop = MAX(qs.max_dop)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Memory grant & spills (min/max per snapshot)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "\nSELECT\n    time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), qs.collection_time),\n    min_grant_kb = MIN(qs.min_grant_kb),\n    max_grant_kb = MAX(qs.max_grant_kb),\n    min_spills = MIN(qs.min_spills),\n    max_spills = MAX(qs.max_spills)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nGROUP BY qs.collection_time\nORDER BY qs.collection_time;\n"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Collection History",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Raw collection snapshots",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "collection_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (500)\n    collection_id = qs.collection_id,\n    qs.collection_time,\n    qs.object_type,\n    qs.creation_time,\n    qs.last_execution_time,\n    qs.server_start_time,\n    execution_count_delta = qs.execution_count_delta,\n    cpu_ms_delta = qs.total_worker_time_delta / 1000,\n    elapsed_ms_delta = qs.total_elapsed_time_delta / 1000,\n    logical_reads_delta = qs.total_logical_reads_delta,\n    physical_reads_delta = qs.total_physical_reads_delta,\n    logical_writes_delta = qs.total_logical_writes_delta,\n    qs.sample_interval_seconds,\n    execution_count = qs.execution_count,\n    total_cpu_ms = qs.total_worker_time / 1000,\n    min_cpu_ms = CONVERT(decimal(19,2), qs.min_worker_time / 1000.0),\n    max_cpu_ms = CONVERT(decimal(19,2), qs.max_worker_time / 1000.0),\n    total_elapsed_ms = qs.total_elapsed_time / 1000,\n    min_elapsed_ms = CONVERT(decimal(19,2), qs.min_elapsed_time / 1000.0),\n    max_elapsed_ms = CONVERT(decimal(19,2), qs.max_elapsed_time / 1000.0),\n    qs.total_logical_reads,\n    qs.total_physical_reads,\n    qs.min_physical_reads,\n    qs.max_physical_reads,\n    qs.total_logical_writes,\n    qs.total_clr_time,\n    qs.total_rows,\n    qs.min_rows,\n    qs.max_rows,\n    qs.min_dop,\n    qs.max_dop,\n    qs.min_grant_kb,\n    qs.max_grant_kb,\n    qs.min_used_grant_kb,\n    qs.max_used_grant_kb,\n    qs.min_ideal_grant_kb,\n    qs.max_ideal_grant_kb,\n    qs.min_reserved_threads,\n    qs.max_reserved_threads,\n    qs.min_used_threads,\n    qs.max_used_threads,\n    qs.total_spills,\n    qs.min_spills,\n    qs.max_spills,\n    sql_handle = CONVERT(varchar(130), qs.sql_handle, 1),\n    plan_handle = CONVERT(varchar(130), qs.plan_handle, 1),\n    query_hash = CONVERT(varchar(20), qs.query_hash, 1),\n    query_plan_hash = CONVERT(varchar(20), qs.query_plan_hash, 1)\nFROM collect.query_stats AS qs\nWHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\nORDER BY qs.collection_time DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "Plan XML",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "panels": []
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Execution plan XML (one row per distinct plan shape)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\n-- Phase 1: find distinct plan shapes and time ranges without reading the LOB.\n-- IX_query_stats_hash_lookup(query_hash, database_name, collection_time) drives the seek;\n-- query_plan_hash and collection_id are fetched via key lookup, query_plan_text is not.\nWITH plan_ranges AS (\n    SELECT\n        qs.query_plan_hash,\n        plan_first_seen      = MIN(qs.collection_time),\n        plan_last_seen       = MAX(qs.collection_time),\n        latest_time          = MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN qs.collection_time END),\n        latest_collection_id = MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN qs.collection_id  END)\n    FROM collect.query_stats AS qs\n    WHERE qs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND qs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND ('${database}' = '' OR qs.database_name = '${database}')\nAND ('${query_hash}' = '' OR qs.query_hash = CONVERT(binary(8), '${query_hash}', 1))\n    GROUP BY qs.query_plan_hash\n    HAVING MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1\n)\n-- Phase 2: one PK point lookup per distinct plan shape to read the LOB.\n-- PK_query_stats is clustered on (collection_time, collection_id) so this is an exact seek.\nSELECT\n    query_plan_hash = CONVERT(varchar(20), pr.query_plan_hash, 1),\n    pr.plan_first_seen,\n    pr.plan_last_seen,\n    plan_xml = CAST(DECOMPRESS(qs.query_plan_text) AS nvarchar(max))\nFROM plan_ranges AS pr\nJOIN collect.query_stats AS qs\n    ON qs.collection_time = pr.latest_time\n    AND qs.collection_id  = pr.latest_collection_id\nORDER BY pr.plan_last_seen DESC;\n"
+        }
+      ],
+      "description": "One row per distinct execution plan shape seen in the time range. Correlate query_plan_hash with the Raw collection snapshots table above to see which plan was active at a given collection. Multiple rows indicate plan instability or PSP. To export: Inspect -> Data -> Download CSV, save plan_xml as a .sqlplan file, open in SSMS."
+    }
+  ]
+}

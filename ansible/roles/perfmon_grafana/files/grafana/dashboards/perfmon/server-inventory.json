@@ -1,0 +1,364 @@
+{
+  "uid": "finops-server-inventory",
+  "title": "FinOps · Server Inventory",
+  "tags": [
+    "finops"
+  ],
+  "timezone": "",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "weekStart": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Fleet Overview",
+      "icon": "dashboard",
+      "type": "link",
+      "url": "/d/perfmon-fleet?${__url_time_range}",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "finops"
+      ],
+      "targetBlank": false,
+      "title": "All FinOps Dashboards",
+      "type": "dashboards",
+      "url": ""
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "perfmon"
+      ],
+      "targetBlank": false,
+      "title": "All PerfMon Dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "datasource",
+        "query": "mssql",
+        "regex": "/^PerfMon-/",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Server Properties",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\n-- sys.dm_os_sys_info and sys.master_files require VIEW SERVER STATE.\n-- Read from collect.server_properties (daily snapshot) and\n-- config.server_info_history (captured on each restart) instead.\nSELECT TOP (1)\n    edition            = sp.edition,\n    sql_version        =\n        sp.product_version\n        + N' - '\n        + ISNULL(sp.product_update_level, sp.product_level),\n    cpu_count          = sp.cpu_count,\n    physical_memory_mb = sp.physical_memory_mb,\n    socket_count       = sp.socket_count,\n    cores_per_socket   = sp.cores_per_socket,\n    is_hadr_enabled    =\n        CASE WHEN sp.is_hadr_enabled = 1 THEN N'Yes' ELSE N'No' END,\n    is_clustered       =\n        CASE WHEN sp.is_clustered = 1 THEN N'Yes' ELSE N'No' END,\n    sqlserver_start_time = sih.sqlserver_start_time,\n    storage_total_gb   =\n        CONVERT(decimal(10,2),\n        (\n            SELECT SUM(CAST(ds.total_size_mb AS bigint)) / 1024.0\n            FROM collect.database_size_stats AS ds\n            WHERE ds.collection_time =\n            (\n                SELECT MAX(ds2.collection_time)\n                FROM collect.database_size_stats AS ds2\n            )\n        ))\nFROM collect.server_properties AS sp\nCROSS JOIN\n(\n    SELECT TOP (1)\n        sqlserver_start_time\n    FROM config.server_info_history\n    ORDER BY collection_time DESC\n) AS sih\nORDER BY sp.collection_time DESC\nOPTION(MAXDOP 1);\n"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Uptime (hours)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "h"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\n-- sys.dm_os_sys_info requires VIEW SERVER STATE; use config.server_info_history instead.\nSELECT TOP (1)\n    uptime_hours =\n        DATEDIFF(HOUR, sih.sqlserver_start_time, SYSDATETIME())\nFROM config.server_info_history AS sih\nORDER BY sih.collection_time DESC\nOPTION(MAXDOP 1);\n"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Health Score (last 24h)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nWITH\n    cpu AS\n    (\n        SELECT DISTINCT\n            avg_cpu = AVG(CONVERT(decimal(5,2), sqlserver_cpu_utilization)) OVER (),\n            p95_cpu =\n                CONVERT(decimal(5,2),\n                    PERCENTILE_CONT(0.95)\n                    WITHIN GROUP (ORDER BY sqlserver_cpu_utilization)\n                    OVER ())\n        FROM collect.cpu_utilization_stats\n        WHERE collection_time >= DATEADD(HOUR, -24, SYSDATETIME())\n    ),\n    mem AS\n    (\n        SELECT TOP (1)\n            memory_ratio =\n                CONVERT(decimal(10,4), ms.total_memory_mb) /\n                NULLIF(ms.committed_target_memory_mb, 0)\n        FROM collect.memory_stats AS ms\n        ORDER BY ms.collection_time DESC\n    ),\n    storage AS\n    (\n        SELECT\n            free_pct = AVG(100.0 - dss.used_pct)\n        FROM collect.database_size_stats AS dss\n        WHERE dss.collection_time =\n        (\n            SELECT MAX(collection_time) FROM collect.database_size_stats\n        )\n    )\nSELECT\n    health_score = CONVERT(int,\n        CASE WHEN c.p95_cpu > 85 THEN 0\n             WHEN c.avg_cpu < 15 THEN 100 - CONVERT(int, c.avg_cpu)\n             ELSE 100 - CONVERT(int, c.p95_cpu)\n        END * 0.4\n        +\n        CASE WHEN ISNULL(m.memory_ratio, 0) > 0.95 THEN 0\n             ELSE (1 - ISNULL(m.memory_ratio, 0)) * 100\n        END * 0.3\n        + ISNULL(s.free_pct, 100) * 0.3\n    )\nFROM cpu AS c\nCROSS JOIN mem AS m\nCROSS JOIN storage AS s\nOPTION(MAXDOP 1, RECOMPILE);\n"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Collected Metrics (CPU: last 24h | idle DBs: last 7d)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "provisioning_status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "OVER_PROVISIONED": {
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "RIGHT_SIZED": {
+                        "color": "green",
+                        "index": 1
+                      },
+                      "UNDER_PROVISIONED": {
+                        "color": "red",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nWITH\n    cpu_24h AS\n    (\n        SELECT DISTINCT\n            avg_cpu_pct =\n                AVG(CONVERT(decimal(5,2), cu.sqlserver_cpu_utilization)) OVER (),\n            max_cpu_pct = MAX(cu.sqlserver_cpu_utilization) OVER (),\n            p95_cpu_pct =\n                CONVERT(decimal(5,2),\n                    PERCENTILE_CONT(0.95)\n                    WITHIN GROUP (ORDER BY cu.sqlserver_cpu_utilization)\n                    OVER ())\n        FROM collect.cpu_utilization_stats AS cu\n        WHERE cu.collection_time >= DATEADD(HOUR, -24, SYSDATETIME())\n    ),\n    mem_latest AS\n    (\n        SELECT TOP (1)\n            memory_ratio =\n                CONVERT(decimal(10,4), ms.total_memory_mb) /\n                NULLIF(ms.committed_target_memory_mb, 0)\n        FROM collect.memory_stats AS ms\n        ORDER BY ms.collection_time DESC\n    ),\n    storage_total AS\n    (\n        SELECT\n            storage_total_gb =\n                SUM(ds.total_size_mb) / 1024.0\n        FROM collect.database_size_stats AS ds\n        WHERE ds.collection_time =\n        (\n            SELECT MAX(ds2.collection_time)\n            FROM collect.database_size_stats AS ds2\n        )\n    ),\n    idle_dbs AS\n    (\n        SELECT\n            idle_db_count = COUNT(DISTINCT d.database_name)\n        FROM\n        (\n            SELECT DISTINCT ds.database_name\n            FROM collect.database_size_stats AS ds\n            WHERE ds.collection_time =\n            (\n                SELECT MAX(ds2.collection_time)\n                FROM collect.database_size_stats AS ds2\n            )\n            AND ds.database_name NOT IN (N'master', N'model', N'msdb', N'tempdb')\n            EXCEPT\n            SELECT DISTINCT qs.database_name\n            FROM collect.query_stats AS qs\n            WHERE qs.collection_time >= DATEADD(DAY, -7, SYSDATETIME())\n            AND   qs.execution_count_delta > 0\n        ) AS d\n    )\nSELECT\n    avg_cpu_pct = c.avg_cpu_pct,\n    storage_total_gb = CONVERT(decimal(10,2), st.storage_total_gb),\n    idle_db_count = id.idle_db_count,\n    provisioning_status =\n        CASE\n            WHEN c.avg_cpu_pct < 15\n            AND  c.max_cpu_pct < 40\n            AND  ISNULL(m.memory_ratio, 0) < 0.5\n            THEN N'OVER_PROVISIONED'\n            WHEN c.p95_cpu_pct > 85\n            OR   ISNULL(m.memory_ratio, 0) > 0.95\n            THEN N'UNDER_PROVISIONED'\n            ELSE N'RIGHT_SIZED'\n        END\nFROM (SELECT 1 AS x) AS anchor\nLEFT JOIN (SELECT TOP (1) avg_cpu_pct, max_cpu_pct, p95_cpu_pct FROM cpu_24h) AS c ON 1 = 1\nLEFT JOIN mem_latest AS m ON 1 = 1\nLEFT JOIN storage_total AS st ON 1 = 1\nLEFT JOIN idle_dbs AS id ON 1 = 1\nOPTION(MAXDOP 1, RECOMPILE);\n"
+        }
+      ]
+    }
+  ]
+}

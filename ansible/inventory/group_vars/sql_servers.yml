@@ -1,0 +1,5 @@
+---
+mssql_sa_user: sa
+# Fine here, but use ansible vault in your env
+mssql_sa_password: "{{ lookup('env', 'MSSQL_SA_PASSWORD') }}"
+mssql_reader_password: "{{ lookup('env', 'GRAFANA_READER_PASSWORD') }}"

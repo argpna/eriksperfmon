@@ -1,0 +1,69 @@
+---
+# Apply local patches to fix upstream PerformanceMonitor issues.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/performance_monitor_patches.yml
+#   ansible-playbook -i ansible/inventory ansible/playbooks/performance_monitor_patches.yml --limit sql2022-a
+
+- name: Apply PerformanceMonitor patches
+  hosts: sql_servers
+  gather_facts: false
+
+  vars:
+    _patches_dir: "{{ playbook_dir }}/../../patches"
+
+  pre_tasks:
+    - name: Resolve sqlcmd binary  # noqa: run-once[task]
+      ansible.builtin.set_fact:
+        _sqlcmd: >-
+          {{
+            sqlcmd_bin
+            if sqlcmd_bin is defined
+            else (
+              '/opt/mssql-tools18/bin/sqlcmd'
+              if lookup('ansible.builtin.fileglob', '/opt/mssql-tools18/bin/sqlcmd')
+              else (
+                '/opt/mssql-tools/bin/sqlcmd'
+                if lookup('ansible.builtin.fileglob', '/opt/mssql-tools/bin/sqlcmd')
+                else 'sqlcmd'
+              )
+            )
+          }}
+      delegate_to: localhost
+      run_once: true
+
+  tasks:
+    - name: Gather patch files  # noqa: run-once[task]
+      ansible.builtin.find:
+        paths: "{{ _patches_dir }}"
+        patterns: "*.sql"
+        file_type: file
+      register: _patch_find
+      delegate_to: localhost
+      run_once: true
+
+    - name: Set derived connection fact
+      ansible.builtin.set_fact:
+        _mssql_server: >-
+          {{
+            ansible_host
+            + ('\\' + mssql_instance if mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
+            + (',' + mssql_port | string if mssql_port is defined else '')
+          }}
+      delegate_to: localhost
+
+    - name: Apply patches
+      ansible.builtin.command: >
+        {{ _sqlcmd }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d master
+        -C -b
+        -i "{{ item }}"
+      loop: "{{ _patch_find.files | map(attribute='path') | sort | list }}"
+      loop_control:
+        label: "{{ item | basename }}"
+      delegate_to: localhost
+      changed_when: true
+      when: _patch_find.files | length > 0

@@ -1,0 +1,9 @@
+---
+# var-naming[no-role-prefix]: public role vars follow technology-convention naming
+# (mssql_*, grafana_*, perfmon_*) and private task vars use _* ephemeral convention,
+# enforcing the role-prefix on both would require renaming well-established inventory
+# variable names without any real benefit especially for roles that won't be part of
+# ansible galaxy
+
+skip_list:
+  - var-naming[no-role-prefix]

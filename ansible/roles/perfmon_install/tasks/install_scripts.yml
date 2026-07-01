@@ -1,0 +1,81 @@
+---
+# Run PerformanceMonitor install scripts 01-54 in order against the target instance.
+# 00 (uninstall) and 97-99 (tests/troubleshooting) are skipped.
+# Install scripts are idempotent. Corresponding tasks report "changed" on every run;
+# that is expected.
+
+- name: Gather install script list
+  ansible.builtin.find:
+    paths: "{{ _perfmon_install_dir }}"
+    patterns: "[0-9]*.sql"
+    file_type: file
+  register: _script_find
+  delegate_to: localhost
+  run_once: true
+
+- name: Sort and filter scripts
+  ansible.builtin.set_fact:
+    _install_scripts: >-
+      {{
+        _script_find.files
+        | map(attribute='path')
+        | sort
+        | reject('search', '/00_')
+        | reject('search', '/97_')
+        | reject('search', '/98_')
+        | reject('search', '/99_')
+        | list
+      }}
+  delegate_to: localhost
+  run_once: true
+
+- name: Run install scripts
+  ansible.builtin.command: >
+    {{ sqlcmd_bin }}
+    -S {{ _mssql_server }}
+    -U {{ mssql_sa_user }}
+    -P "{{ mssql_sa_password }}"
+    -d master
+    -C -b
+    -i "{{ item }}"
+  loop: "{{ _install_scripts }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  delegate_to: localhost
+  changed_when: true
+
+- name: Determine installation type for history record
+  ansible.builtin.set_fact:
+    _install_type: >-
+      {%- if _installed_version_clean | default('') | length == 0 -%}
+        INSTALL
+      {%- elif _installed_version_clean is version(_perfmon_version_clean, '==') -%}
+        REINSTALL
+      {%- else -%}
+        UPGRADE
+      {%- endif -%}
+  delegate_to: localhost
+  run_once: true
+  when: not (_upgrade_needed | default(false) | bool)
+
+- name: Record installation in installation_history
+  ansible.builtin.command: >
+    {{ sqlcmd_bin }}
+    -S {{ _mssql_server }}
+    -U {{ mssql_sa_user }}
+    -P "{{ mssql_sa_password }}"
+    -d "{{ perfmon_db }}"
+    -C -b
+    -Q "INSERT INTO config.installation_history
+            (installer_version, installer_info_version, sql_server_version,
+             sql_server_edition, installation_type, previous_version,
+             installation_status, files_executed, files_failed)
+        VALUES
+            (N'{{ _perfmon_version_clean }}', N'ansible',
+             @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
+             N'{{ _install_type }}',
+             {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
+             N'SUCCESS', {{ _install_scripts | length }}, 0);"
+  delegate_to: localhost
+  changed_when: true
+  when: not (_upgrade_needed | default(false) | bool)

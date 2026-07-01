@@ -1,0 +1,24 @@
+---
+- name: Provision datasources
+  ansible.builtin.import_tasks: datasources.yml
+  tags: datasources
+
+- name: Generate dashboard JSON files
+  ansible.builtin.import_tasks: generate_dashboards.yml
+  tags:
+    - dashboards
+    - generate
+
+- name: Import dashboards into Grafana
+  ansible.builtin.import_tasks: dashboards.yml
+  tags: dashboards
+
+- name: Provision alerting resources
+  ansible.builtin.import_tasks: alerting.yml
+  tags: alerting
+
+- name: Remove all provisioned resources
+  ansible.builtin.import_tasks: teardown.yml
+  tags:
+    - teardown
+    - never

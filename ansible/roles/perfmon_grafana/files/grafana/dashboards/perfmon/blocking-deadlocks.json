@@ -1,0 +1,1142 @@
+{
+  "uid": "perfmon-blocking",
+  "title": "PerfMon · Locking",
+  "tags": [
+    "perfmon"
+  ],
+  "timezone": "",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "weekStart": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Fleet Overview",
+      "icon": "dashboard",
+      "type": "link",
+      "url": "/d/perfmon-fleet?${__url_time_range}",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "perfmon"
+      ],
+      "targetBlank": false,
+      "title": "All PerfMon Dashboards",
+      "type": "dashboards",
+      "url": ""
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "finops"
+      ],
+      "targetBlank": false,
+      "title": "All FinOps Dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "datasource",
+        "query": "mssql",
+        "regex": "/^PerfMon-/",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Blocking/Deadlock Trends",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Blocking events (range)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT v = ISNULL(SUM(bds.blocking_event_count_delta), 0) FROM collect.blocking_deadlock_stats AS bds WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()));"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Deadlocks (range)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT v = ISNULL(SUM(bds.deadlock_count_delta), 0) FROM collect.blocking_deadlock_stats AS bds WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()));"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Deadlock victims (range)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT v = ISNULL(SUM(bds.victim_count_delta), 0) FROM collect.blocking_deadlock_stats AS bds WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()));"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Max blocking duration (range)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT v = ISNULL(MAX(bds.max_blocking_duration_ms), 0) / 1000.0 FROM collect.blocking_deadlock_stats AS bds WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()));"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Blocking events & deadlocks",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), bds.collection_time), blocking_events = SUM(bds.blocking_event_count_delta), deadlocks = SUM(bds.deadlock_count_delta) FROM collect.blocking_deadlock_stats AS bds WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo())) GROUP BY bds.collection_time ORDER BY bds.collection_time;"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Blocking & deadlocks by database",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT\n    database_name = bds.database_name,\n    blocking_events = SUM(bds.blocking_event_count_delta),\n    total_blocked_seconds = SUM(bds.total_blocking_duration_ms_delta) / 1000,\n    deadlocks = SUM(bds.deadlock_count_delta),\n    victims = SUM(bds.victim_count_delta)\nFROM collect.blocking_deadlock_stats AS bds\nWHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nGROUP BY bds.database_name\nHAVING SUM(bds.blocking_event_count_delta) > 0 OR SUM(bds.deadlock_count_delta) > 0\nORDER BY SUM(bds.blocking_event_count_delta) DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Current Waits",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Wait duration by wait type",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), wt.collection_time), metric = wt.wait_type, value = SUM(CONVERT(float, wt.wait_duration_ms)) FROM collect.waiting_tasks AS wt WHERE wt.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND wt.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo())) AND wt.wait_type NOT IN (N'SLEEP', N'WAITFOR', N'BROKER_TO_FLUSH') GROUP BY wt.collection_time, wt.wait_type ORDER BY wt.collection_time;"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Blocked sessions by database",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time = DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), wt.collection_time), metric = wt.database_name, value = COUNT_BIG(*) FROM collect.waiting_tasks AS wt WHERE wt.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND wt.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo())) AND wt.blocking_session_id <> 0 GROUP BY wt.collection_time, wt.database_name ORDER BY wt.collection_time;"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Waiting tasks",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "collection_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (200)\n    wt.collection_time,\n    wt.session_id,\n    wt.blocking_session_id,\n    wt.wait_type,\n    wait_seconds = wt.wait_duration_ms / 1000.0,\n    wt.resource_description,\n    wt.database_name,\n    wt.command,\n    wt.cpu_time_ms,\n    wt.logical_reads,\n    query_text = CONVERT(nvarchar(300), LEFT(wt.query_text, 300))\nFROM collect.waiting_tasks AS wt\nWHERE wt.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND wt.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY wt.collection_time DESC, wt.wait_duration_ms DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Blocking",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Blocked process reports",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "event_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    bpr.event_time,\n    bpr.collection_time,\n    bpr.database_name,\n    bpr.currentdbname,\n    bpr.contentious_object,\n    bpr.activity,\n    bpr.blocking_tree,\n    blocked_spid = bpr.spid,\n    bpr.ecid,\n    wait_seconds = bpr.wait_time_ms / 1000.0,\n    bpr.status,\n    bpr.isolation_level,\n    bpr.lock_mode,\n    bpr.resource_owner_type,\n    bpr.wait_resource,\n    bpr.transaction_count,\n    bpr.transaction_name,\n    bpr.last_transaction_started,\n    bpr.last_transaction_completed,\n    bpr.priority,\n    bpr.log_used,\n    bpr.client_app,\n    bpr.host_name,\n    bpr.login_name,\n    bpr.transaction_id,\n    bpr.client_option_1,\n    bpr.client_option_2,\n    query_text = CONVERT(nvarchar(500), LEFT(CONVERT(nvarchar(max), bpr.query_text), 500)),\n    blocked_process_report_xml = CONVERT(nvarchar(max), bpr.blocked_process_report_xml)\nFROM collect.blocking_BlockedProcessReport AS bpr\nWHERE bpr.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bpr.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY bpr.event_time DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Blocking chains (waiting tasks with head blockers)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "collection_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    wt.collection_time,\n    wt.session_id,\n    wt.blocking_session_id,\n    wt.wait_type,\n    wait_seconds = wt.wait_duration_ms / 1000.0,\n    wt.database_name,\n    wt.command,\n    wt.request_status,\n    wt.cpu_time_ms,\n    total_elapsed_sec = wt.total_elapsed_time_ms / 1000.0,\n    wt.logical_reads,\n    wt.writes,\n    wt.row_count,\n    wt.resource_description,\n    query_text = CONVERT(nvarchar(300), LEFT(wt.query_text, 300))\nFROM collect.waiting_tasks AS wt\nWHERE wt.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND wt.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n    AND wt.blocking_session_id <> 0\nORDER BY wt.collection_time DESC, wt.wait_duration_ms DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Blocking hierarchy",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "CRITICAL": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "HIGH": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "MEDIUM": {
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "LOW": {
+                        "color": "green",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "blocking_chain_position"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "HEAD BLOCKER": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "INTERMEDIATE": {
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "BLOCKED": {
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "collection_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    bca.collection_time,\n    bca.session_id,\n    bca.blocking_session_id,\n    bca.blocking_chain_position,\n    sessions_blocked = bca.sessions_blocked,\n    bca.wait_type,\n    wait_sec = CONVERT(decimal(19,2), bca.wait_duration_sec),\n    bca.database_name,\n    bca.command,\n    bca.cpu_time_ms,\n    bca.logical_reads,\n    bca.severity,\n    bca.recommendation,\n    query_text = LEFT(bca.query_text, 300)\nFROM report.blocking_chain_analysis AS bca\nWHERE bca.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bca.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY bca.collection_time DESC, bca.sessions_blocked DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "Deadlocks",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "panels": []
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "Deadlock participants",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 65
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "event_date",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    d.event_date,\n    d.collection_time,\n    d.database_name,\n    d.ServerName,\n    d.deadlock_type,\n    d.spid,\n    d.deadlock_group,\n    d.status,\n    d.isolation_level,\n    d.owner_mode,\n    d.waiter_mode,\n    d.lock_mode,\n    d.transaction_count,\n    wait_ms = d.wait_time,\n    d.wait_resource,\n    d.priority,\n    d.log_used,\n    d.login_name,\n    d.host_name,\n    d.client_app,\n    d.last_tran_started,\n    d.last_batch_started,\n    d.last_batch_completed,\n    d.transaction_name,\n    d.owner_waiter_type,\n    d.owner_activity,\n    d.owner_waiter_activity,\n    d.owner_merging,\n    d.owner_spilling,\n    d.owner_waiting_to_close,\n    d.waiter_waiter_type,\n    d.waiter_owner_activity,\n    d.waiter_waiter_activity,\n    d.waiter_merging,\n    d.waiter_spilling,\n    d.waiter_waiting_to_close,\n    d.client_option_1,\n    d.client_option_2,\n    query = CONVERT(nvarchar(500), LEFT(CONVERT(nvarchar(max), d.query), 500)),\n    object_names = CONVERT(nvarchar(500), LEFT(CONVERT(nvarchar(max), d.object_names), 500))\nFROM collect.deadlocks AS d\nWHERE d.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND d.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY d.event_date DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "table",
+      "title": "Deadlock events",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deadlock_group"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View deadlock detail",
+                    "url": "/d/perfmon-deadlock-detail?${__url_time_range}&var-instance=${instance}&var-deadlock_id=${__data.fields.deadlock_id}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deadlock_id"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "event_date",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (50)\n    d.event_date,\n    d.database_name,\n    d.deadlock_group,\n    d.deadlock_id\nFROM (\n    SELECT\n        event_date,\n        database_name,\n        deadlock_group,\n        deadlock_id,\n        rn = ROW_NUMBER() OVER (PARTITION BY deadlock_group ORDER BY deadlock_id)\n    FROM collect.deadlocks\n    WHERE collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n) AS d\nWHERE d.rn = 1\nORDER BY d.event_date DESC;\n"
+        }
+      ],
+      "description": "One row per unique deadlock event. Click a deadlock_group value to open the full participant detail and XDL graph."
+    }
+  ]
+}

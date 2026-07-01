@@ -1,0 +1,181 @@
+{
+  "uid": "finops-recommendations",
+  "title": "FinOps · Recommendations",
+  "tags": [
+    "finops"
+  ],
+  "timezone": "",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "weekStart": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Fleet Overview",
+      "icon": "dashboard",
+      "type": "link",
+      "url": "/d/perfmon-fleet?${__url_time_range}",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "finops"
+      ],
+      "targetBlank": false,
+      "title": "All FinOps Dashboards",
+      "type": "dashboards",
+      "url": ""
+    },
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "perfmon"
+      ],
+      "targetBlank": false,
+      "title": "All PerfMon Dashboards",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "datasource",
+        "query": "mssql",
+        "regex": "/^PerfMon-/",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "sort": 1,
+        "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Cost-Saving Recommendations (last 7 days)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "High": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "Medium": {
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "Low": {
+                        "color": "blue",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "severity",
+            "desc": false
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nWITH\n    server_props AS\n    (\n        SELECT\n            edition   = CAST(SERVERPROPERTY(N'Edition') AS nvarchar(128)),\n            major_ver = CAST(SERVERPROPERTY(N'ProductMajorVersion') AS int)\n    ),\n    utilization AS\n    (\n        SELECT TOP (1)\n            avg_cpu_pct,\n            max_cpu_pct,\n            p95_cpu_pct,\n            cpu_count\n        FROM report.finops_utilization_efficiency\n    ),\n    cpu_7d AS\n    (\n        SELECT DISTINCT\n            p95_cpu =\n                CONVERT(decimal(5,2),\n                    PERCENTILE_CONT(0.95)\n                    WITHIN GROUP (ORDER BY sqlserver_cpu_utilization)\n                    OVER ())\n        FROM collect.cpu_utilization_stats\n        WHERE collection_time >= DATEADD(DAY, -7, SYSDATETIME())\n    ),\n    cpu_7d_row AS (SELECT TOP (1) p95_cpu FROM cpu_7d),\n    mem_latest AS\n    (\n        SELECT TOP (1)\n            total_memory_mb,\n            committed_target_memory_mb\n        FROM collect.memory_stats\n        ORDER BY collection_time DESC\n    ),\n    db_sizes AS\n    (\n        SELECT\n            database_name,\n            total_size_mb = SUM(total_size_mb)\n        FROM collect.database_size_stats\n        WHERE collection_time =\n        (\n            SELECT MAX(collection_time) FROM collect.database_size_stats\n        )\n        GROUP BY database_name\n    ),\n    db_activity AS\n    (\n        SELECT\n            database_name,\n            total_executions = SUM(execution_count_delta)\n        FROM collect.query_stats\n        WHERE collection_time >= DATEADD(DAY, -7, SYSDATETIME())\n        AND   execution_count_delta IS NOT NULL\n        GROUP BY database_name\n    ),\n    idle_dbs AS\n    (\n        SELECT\n            idle_count   = COUNT(*),\n            idle_size_mb = SUM(ds.total_size_mb)\n        FROM db_sizes AS ds\n        LEFT JOIN db_activity AS a ON a.database_name = ds.database_name\n        WHERE ISNULL(a.total_executions, 0) = 0\n        AND   ds.database_name NOT IN\n              (N'master', N'model', N'msdb', N'tempdb', N'PerformanceMonitor')\n    ),\n    io_by_db AS\n    (\n        SELECT\n            database_name,\n            avg_read_ms =\n                CASE WHEN SUM(num_of_reads_delta) > 0\n                THEN CONVERT(decimal(10,2), SUM(io_stall_read_ms_delta) * 1.0 / SUM(num_of_reads_delta))\n                ELSE 0.0 END,\n            avg_write_ms =\n                CASE WHEN SUM(num_of_writes_delta) > 0\n                THEN CONVERT(decimal(10,2), SUM(io_stall_write_ms_delta) * 1.0 / SUM(num_of_writes_delta))\n                ELSE 0.0 END\n        FROM collect.file_io_stats\n        WHERE collection_time >= DATEADD(DAY, -7, SYSDATETIME())\n        AND   num_of_reads_delta IS NOT NULL\n        GROUP BY database_name\n        HAVING SUM(num_of_reads_delta) > 1000\n    ),\n    low_latency AS\n    (\n        SELECT\n            low_count = COUNT(*),\n            db_list   = STRING_AGG(\n                            database_name\n                            + N' (read ' + CAST(avg_read_ms AS varchar(10))\n                            + N'ms, write ' + CAST(avg_write_ms AS varchar(10)) + N'ms)',\n                            N'; ')\n        FROM io_by_db\n        WHERE avg_read_ms < 5 AND avg_write_ms < 3\n    ),\n    long_jobs AS\n    (\n        SELECT\n            job_name,\n            avg_dur_s  = AVG(current_duration_seconds),\n            max_dur_s  = MAX(current_duration_seconds),\n            avg_hist_s = AVG(avg_duration_seconds),\n            times_long = SUM(CAST(is_running_long AS int))\n        FROM collect.running_jobs\n        WHERE collection_time >= DATEADD(DAY, -7, SYSDATETIME())\n        AND   avg_duration_seconds > 0\n        GROUP BY job_name\n        HAVING SUM(CAST(is_running_long AS int)) >= 3\n    ),\n    findings AS\n    (\n        SELECT\n            category   = N'Licensing',\n            severity   = N'High',\n            confidence = N'Medium',\n            finding    = N'Enterprise Edition may not be required',\n            detail     = N'Starting with SQL Server 2019, most previously Enterprise-only features '\n                       + N'(including TDE, compression, partitioning, and columnstore) are available '\n                       + N'in Standard Edition. Review whether remaining Enterprise-only features '\n                       + N'(such as Always On availability groups with multiple secondaries) are in use '\n                       + N'before considering a downgrade to Standard Edition.'\n        FROM server_props\n        WHERE edition LIKE N'%Enterprise%'\n        AND   major_ver >= 15\n\n        UNION ALL\n\n        SELECT\n            N'Compute',\n            CASE WHEN u.p95_cpu_pct < 15 THEN N'High' ELSE N'Medium' END,\n            N'Medium',\n            N'CPU over-provisioned (' + CAST(u.cpu_count AS varchar) + N' cores, P95 = '\n                + CAST(u.p95_cpu_pct AS varchar(10)) + N'%)',\n            N'P95 CPU utilization is ' + CAST(u.p95_cpu_pct AS varchar(10))\n                + N'% (avg ' + CAST(u.avg_cpu_pct AS varchar(10))\n                + N'%, max ' + CAST(u.max_cpu_pct AS varchar(10))\n                + N'%) across ' + CAST(u.cpu_count AS varchar) + N' cores. Consider reducing to ~'\n                + CAST(\n                    CASE WHEN CAST(u.cpu_count * u.p95_cpu_pct / 70.0 AS int) > 4\n                    THEN CAST(u.cpu_count * u.p95_cpu_pct / 70.0 AS int)\n                    ELSE 4 END\n                  AS varchar) + N' cores.'\n        FROM utilization AS u\n        WHERE u.p95_cpu_pct < 30\n        AND   u.cpu_count > 4\n\n        UNION ALL\n\n        SELECT\n            N'Hardware',\n            N'Medium',\n            N'Medium',\n            N'CPU: reduce from ' + CAST(u.cpu_count AS varchar) + N' to '\n                + CAST(\n                    CASE WHEN c.p95_cpu < 15\n                    THEN CASE WHEN u.cpu_count / 4 < 2 THEN 2 ELSE u.cpu_count / 4 END\n                    ELSE CASE WHEN u.cpu_count / 2 < 2 THEN 2 ELSE u.cpu_count / 2 END\n                    END AS varchar)\n                + N' cores (P95 CPU ' + CAST(c.p95_cpu AS varchar(10)) + N'%)',\n            N'Over the last 7 days, P95 CPU utilization was ' + CAST(c.p95_cpu AS varchar(10))\n                + N'%. Current allocation of ' + CAST(u.cpu_count AS varchar)\n                + N' cores can safely be reduced.'\n        FROM cpu_7d_row AS c\n        CROSS JOIN utilization AS u\n        WHERE c.p95_cpu < 30\n        AND   u.cpu_count >= 4\n        AND\n        (\n            CASE WHEN c.p95_cpu < 15\n            THEN CASE WHEN u.cpu_count / 4 < 2 THEN 2 ELSE u.cpu_count / 4 END\n            ELSE CASE WHEN u.cpu_count / 2 < 2 THEN 2 ELSE u.cpu_count / 2 END\n            END\n        ) < u.cpu_count\n\n        UNION ALL\n\n        SELECT\n            N'Databases',\n            CASE WHEN d.idle_count >= 3 THEN N'High' ELSE N'Medium' END,\n            N'High',\n            CAST(d.idle_count AS varchar) + N' idle database(s) consuming '\n                + CAST(CONVERT(decimal(10,1), d.idle_size_mb / 1024.0) AS varchar) + N'GB',\n            N'No query activity in the last 7 days. Candidates for archival or removal.'\n        FROM idle_dbs AS d\n        WHERE d.idle_count > 0\n\n        UNION ALL\n\n        SELECT\n            N'Memory',\n            N'High',\n            N'High',\n            N'Memory pressure: buffer pool / target = '\n                + CAST(CONVERT(decimal(5,1),\n                    m.total_memory_mb * 100.0 /\n                    NULLIF(m.committed_target_memory_mb, 0)) AS varchar) + N'%',\n            N'SQL Server memory usage exceeds 95% of committed target. '\n            + N'Check for memory-intensive queries or increase max server memory.'\n        FROM mem_latest AS m\n        WHERE m.total_memory_mb > 0\n        AND   m.total_memory_mb * 1.0 / NULLIF(m.committed_target_memory_mb, 0) > 0.95\n\n        UNION ALL\n\n        SELECT\n            N'Maintenance',\n            CASE WHEN times_long >= 5 THEN N'Medium' ELSE N'Low' END,\n            N'High',\n            job_name + N' ran long ' + CAST(times_long AS varchar) + N' times in 7 days',\n            N'Average duration: '\n                + CASE WHEN avg_dur_s >= 3600\n                       THEN CAST(avg_dur_s / 3600 AS varchar) + N'h '\n                          + CAST((avg_dur_s % 3600) / 60 AS varchar) + N'm '\n                          + CAST(avg_dur_s % 60 AS varchar) + N's'\n                       WHEN avg_dur_s >= 60\n                       THEN CAST(avg_dur_s / 60 AS varchar) + N'm '\n                          + CAST(avg_dur_s % 60 AS varchar) + N's'\n                       ELSE CAST(avg_dur_s AS varchar) + N's' END\n                + N', max: '\n                + CASE WHEN max_dur_s >= 3600\n                       THEN CAST(max_dur_s / 3600 AS varchar) + N'h '\n                          + CAST((max_dur_s % 3600) / 60 AS varchar) + N'm '\n                          + CAST(max_dur_s % 60 AS varchar) + N's'\n                       WHEN max_dur_s >= 60\n                       THEN CAST(max_dur_s / 60 AS varchar) + N'm '\n                          + CAST(max_dur_s % 60 AS varchar) + N's'\n                       ELSE CAST(max_dur_s AS varchar) + N's' END\n                + N', historical average: '\n                + CASE WHEN avg_hist_s >= 3600\n                       THEN CAST(avg_hist_s / 3600 AS varchar) + N'h '\n                          + CAST((avg_hist_s % 3600) / 60 AS varchar) + N'm '\n                          + CAST(avg_hist_s % 60 AS varchar) + N's'\n                       WHEN avg_hist_s >= 60\n                       THEN CAST(avg_hist_s / 60 AS varchar) + N'm '\n                          + CAST(avg_hist_s % 60 AS varchar) + N's'\n                       ELSE CAST(avg_hist_s AS varchar) + N's' END\n                + N'. Review whether this job''s schedule or operations need tuning.'\n        FROM long_jobs\n\n        UNION ALL\n\n        SELECT\n            N'Storage',\n            N'Low',\n            N'Medium',\n            CAST(low_count AS varchar) + N' database(s) with low IO latency - standard storage may suffice',\n            N'These databases have avg read latency under 5ms and write under 3ms over 7 days: '\n                + db_list + N'. Premium/high-performance storage may not be needed.'\n        FROM low_latency\n        WHERE low_count > 0\n    )\nSELECT category, severity, confidence, finding, detail\nFROM findings\nORDER BY\n    CASE severity WHEN N'High' THEN 1 WHEN N'Medium' THEN 2 ELSE 3 END,\n    category\nOPTION(MAXDOP 1, RECOMPILE);\n"
+        }
+      ]
+    }
+  ]
+}

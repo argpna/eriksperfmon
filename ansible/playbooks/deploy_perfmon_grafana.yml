@@ -1,0 +1,18 @@
+---
+# Provision datasources, generate and import dashboards, and configure alerting
+# for PerformanceMonitor in Grafana.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml
+#   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags generate
+#   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags datasources
+#   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags dashboards
+#   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags alerting
+
+- name: Deploy PerformanceMonitor dashboards to Grafana
+  hosts: grafana
+  gather_facts: false
+  tasks:
+    - name: Apply perfmon_grafana role
+      ansible.builtin.import_role:
+        name: perfmon_grafana

@@ -1,0 +1,31 @@
+---
+# pre-populate community/perfmon-<version>.zip in this repo for air-gapped installs
+perfmon_version: "v3.0.0"
+perfmon_state: present
+perfmon_force_reinstall: false
+
+mssql_instance: "MSSQLSERVER"
+mssql_sa_user: sa
+# mssql_sa_password: set in inventory group_vars or vault
+# mssql_reader_password: set in inventory group_vars or vault
+
+perfmon_db: PerformanceMonitor
+
+# path to sqlcmd on the ansible control node
+# common locations: /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd sqlcmd
+sqlcmd_bin: sqlcmd
+
+perfmon_tmp_dir: /tmp/perfmon-install
+
+# directory of local .sql patch files to apply immediately after install scripts.
+# leave empty to skip. set to the patches/ directory path in your inventory.
+perfmon_local_patches_dir: ""
+
+# pre-populate community/ in this repo for air-gapped installs
+perfmon_community_tools:
+  - name: sp_WhoIsActive
+    url: "https://raw.githubusercontent.com/amachanic/sp_whoisactive/refs/heads/master/sp_WhoIsActive.sql"
+  - name: DarlingData
+    url: "https://raw.githubusercontent.com/erikdarlingdata/DarlingData/main/Install-All/DarlingData.sql"
+  - name: FirstResponderKit
+    url: "https://raw.githubusercontent.com/BrentOzarULTD/SQL-Server-First-Responder-Kit/refs/heads/main/Install-All-Scripts.sql"

@@ -1,0 +1,47 @@
+---
+# Fine here, but use ansible vault in your env
+mssql_reader_password: "{{ lookup('env', 'GRAFANA_READER_PASSWORD') }}"
+grafana_api_key: "{{ lookup('env', 'GRAFANA_API_KEY') | default('') }}"
+
+perfmon_alert_receiver_name: perfmon-alerts
+
+# Examples for contact points
+perfmon_alert_contact_points:
+  - uid: perfmon-email
+    name: perfmon-alerts
+    type: email
+    settings:
+      addresses: dbops@example.com
+  - uid: perfmon-slack
+    name: perfmon-alerts
+    type: slack
+    settings:
+      url: https://hooks.slack.com/services/T000000/B000000/XXXXXXXXXXXXXXXXXXXXXXXX
+      recipient: "#alerts"
+      title: "PerfMon Alert"
+  - uid: perfmon-webhook
+    name: perfmon-alerts
+    type: webhook
+    settings:
+      url: https://webhook.example.com/perfmon
+      httpMethod: POST
+  - uid: perfmon-pagerduty
+    name: perfmon-alerts
+    type: pagerduty
+    settings:
+      integrationKey: abc123def456abc123def456abc123de
+
+# Examples for mute timings
+perfmon_alert_mute_timings:
+  - name: perfmon-weekend-maintenance
+    time_intervals:
+      - weekdays: ["saturday", "sunday"]
+        times:
+          - start_time: "00:00"
+            end_time: "23:59"
+  - name: perfmon-nightly-maintenance
+    time_intervals:
+      - weekdays: ["monday:friday"]
+        times:
+          - start_time: "02:00"
+            end_time: "04:00"

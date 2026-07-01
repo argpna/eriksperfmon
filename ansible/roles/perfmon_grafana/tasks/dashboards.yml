@@ -1,0 +1,24 @@
+---
+# Import dashboard JSON files into Grafana via the community.grafana collection.
+
+- name: Ensure PerformanceMonitor folder exists
+  community.grafana.grafana_folder:
+    grafana_url: "{{ grafana_url }}"
+    grafana_api_key: "{{ grafana_api_key }}"
+    title: "{{ grafana_folder }}"
+    uid: "{{ grafana_folder_uid }}"
+    state: present
+  delegate_to: localhost
+
+- name: Import dashboard
+  community.grafana.grafana_dashboard:
+    grafana_url: "{{ grafana_url }}"
+    grafana_api_key: "{{ grafana_api_key }}"
+    path: "{{ item }}"
+    folder: "{{ grafana_folder }}"
+    overwrite: true
+    state: present
+  loop: "{{ lookup('fileglob', role_path + '/files/grafana/dashboards/perfmon/*.json', wantlist=true) }}"
+  loop_control:
+    label: "{{ item | basename | replace('.json', '') }}"
+  delegate_to: localhost

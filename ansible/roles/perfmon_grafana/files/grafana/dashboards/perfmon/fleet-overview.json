@@ -1,0 +1,814 @@
+{
+  "uid": "perfmon-fleet",
+  "title": "PerfMon · Fleet Overview",
+  "tags": [
+    "perfmon",
+    "begin-here"
+  ],
+  "timezone": "",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "fiscalYearStartMonth": 0,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "weekStart": "",
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "datasource",
+        "query": "mssql",
+        "regex": "/^PerfMon-/",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
+      },
+      {
+        "name": "filter",
+        "label": "Filter instances",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "description": "Type to filter visible instances by name."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "repeat": "instance",
+      "repeatDirection": "v",
+      "maxPerRow": 1,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "server_name"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Instance"
+              },
+              {
+                "id": "custom.width",
+                "value": 220
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open instance overview",
+                    "url": "/d/perfmon-instance?${__url_time_range}&var-instance=${instance}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cpu_pct"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "CPU %"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 50
+                    },
+                    {
+                      "color": "red",
+                      "value": 85
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "color"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg_runnable"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Avg Runnable Tasks"
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "worker_pct"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Workers % of max"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "blue",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 70
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "gradient",
+                  "valueDisplayMode": "color"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "grant_waiters"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grant Waiters"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "resource_sem_ms_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Res Sem Wait (ms/min)"
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 100
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "io_pressure_ms_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "IO Pressure (ms/min)"
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 50
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pagelatch_ms_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Page Contention (ms/min)"
+              },
+              {
+                "id": "custom.width",
+                "value": 200
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 100
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "blocking"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Blocking (range)"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 10
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max_block_sec"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Max Block (sec)"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 5
+                    },
+                    {
+                      "color": "red",
+                      "value": 30
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deadlocks"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Deadlocks (range)"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "unhealthy_cols"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Collectors unhealthy"
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Collection age (min)"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 3
+                    },
+                    {
+                      "color": "red",
+                      "value": 10
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "severity_score"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Severity"
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "transparent",
+                      "value": null
+                    },
+                    {
+                      "color": "#EAB839",
+                      "value": 3
+                    },
+                    {
+                      "color": "red",
+                      "value": 6
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nWITH\ncpu_stats AS (\n    SELECT avg_cpu_pct = ISNULL(AVG(ISNULL(cus.total_cpu_utilization, cus.sqlserver_cpu_utilization) * 1.0), 0)\n    FROM collect.cpu_utilization_stats AS cus\n    WHERE cus.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND cus.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nscheduler_stats AS (\n    SELECT\n        avg_runnable   = ISNULL(AVG(css.avg_runnable_tasks_count * 1.0), 0),\n        max_worker_pct = ISNULL(MAX(css.total_current_workers_count * 100.0 / NULLIF(css.max_workers_count, 0)), 0)\n    FROM collect.cpu_scheduler_stats AS css\n    WHERE css.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND css.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\ngrant_stats AS (\n    SELECT max_grant_waiters = ISNULL(MAX(mgs.waiter_count), 0)\n    FROM collect.memory_grant_stats AS mgs\n    WHERE mgs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND mgs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nwait_agg AS (\n    SELECT\n        resource_sem_ms_min = ISNULL(\n            SUM(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.collection_time END)), 0), 0),\n        pageiolatch_ms_min  = ISNULL(\n            SUM(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.collection_time END)), 0), 0),\n        pagelatch_ms_min    = ISNULL(\n            SUM(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.collection_time END)), 0), 0)\n    FROM collect.wait_stats AS ws\n    WHERE ws.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND ws.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n      AND (ws.wait_type = N'RESOURCE_SEMAPHORE' OR ws.wait_type LIKE N'PAGEIOLATCH_%' OR ws.wait_type LIKE N'PAGELATCH_%')\n),\nfile_io AS (\n    SELECT io_stall_ms_min = ISNULL(\n        SUM(fio.io_stall_ms_delta) * 1.0\n        / NULLIF(DATEDIFF(MINUTE, MIN(fio.collection_time), MAX(fio.collection_time)), 0), 0)\n    FROM collect.file_io_stats AS fio\n    WHERE fio.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND fio.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nblocking_agg AS (\n    SELECT\n        blocking      = ISNULL(SUM(bds.blocking_event_count_delta), 0),\n        max_block_sec = ISNULL(MAX(bds.max_blocking_duration_ms_delta), 0) / 1000.0,\n        deadlocks     = ISNULL(SUM(bds.deadlock_count_delta), 0)\n    FROM collect.blocking_deadlock_stats AS bds\n    WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nbase AS (\n    SELECT\n        server_name         = (SELECT TOP 1 si.server_name FROM config.server_info AS si),\n        cpu_pct             = cs.avg_cpu_pct,\n        avg_runnable        = ss.avg_runnable,\n        worker_pct          = ss.max_worker_pct,\n        grant_waiters       = gs.max_grant_waiters,\n        resource_sem_ms_min = wa.resource_sem_ms_min,\n        io_pressure_ms_min  = fi.io_stall_ms_min + wa.pageiolatch_ms_min,\n        pagelatch_ms_min    = wa.pagelatch_ms_min,\n        blocking            = ba.blocking,\n        max_block_sec       = ba.max_block_sec,\n        deadlocks           = ba.deadlocks,\n        unhealthy_cols      = (SELECT COUNT_BIG(DISTINCT cl.collector_name) FROM config.collection_log AS cl WHERE cl.collection_time >= DATEADD(MINUTE, -5, SYSDATETIME()) AND cl.collection_status = N'ERROR'),\n        age_min             = DATEDIFF(MINUTE, (SELECT MAX(cl.collection_time) FROM config.collection_log AS cl), SYSDATETIME())\n    FROM cpu_stats AS cs\n    CROSS JOIN scheduler_stats AS ss\n    CROSS JOIN grant_stats AS gs\n    CROSS JOIN wait_agg AS wa\n    CROSS JOIN file_io AS fi\n    CROSS JOIN blocking_agg AS ba\n),\nscored AS (\n    SELECT *,\n        severity_score =\n            CASE WHEN cpu_pct > 85 THEN 3 WHEN cpu_pct > 50 THEN 1 ELSE 0 END\n          + CASE WHEN worker_pct > 90 THEN 3 WHEN worker_pct > 70 THEN 1 ELSE 0 END\n          + CASE WHEN grant_waiters > 5 THEN 3 WHEN grant_waiters > 1 THEN 1 ELSE 0 END\n          + CASE WHEN resource_sem_ms_min > 100 THEN 3 WHEN resource_sem_ms_min > 10 THEN 1 ELSE 0 END\n          + CASE WHEN io_pressure_ms_min > 500 THEN 3 WHEN io_pressure_ms_min > 50 THEN 1 ELSE 0 END\n          + CASE WHEN pagelatch_ms_min > 100 THEN 2 WHEN pagelatch_ms_min > 10 THEN 1 ELSE 0 END\n          + CASE WHEN avg_runnable > 20 THEN 2 WHEN avg_runnable > 5 THEN 1 ELSE 0 END\n          + CASE WHEN blocking > 25 THEN 2 WHEN blocking > 1 THEN 1 ELSE 0 END\n          + CASE WHEN deadlocks > 10 THEN 2 WHEN deadlocks > 1 THEN 1 ELSE 0 END\n    FROM base\n)\nSELECT * FROM scored\nWHERE (N'${filter}' = N'' OR server_name LIKE N'%' + N'${filter}' + N'%');\n"
+        }
+      ]
+    }
+  ]
+}
