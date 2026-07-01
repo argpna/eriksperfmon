@@ -175,6 +175,30 @@
       changed_when: true
 
   rescue:
+    - name: Extract failure detail from the failed task result
+      ansible.builtin.set_fact:
+        _upgrade_failure_raw: >-
+          {%- set res = ansible_failed_result -%}
+          {%- set failed_items = res.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | list -%}
+          {%- if failed_items | length > 0 -%}
+            {{ failed_items[0].item | basename }}: {{ failed_items[0].stderr | default(failed_items[0].msg | default('no error output')) }}
+          {%- else -%}
+            {{ res.stderr | default(res.msg | default('no error output')) }}
+          {%- endif -%}
+      delegate_to: localhost
+      run_once: true
+
+    - name: Sanitize failure detail for embedding in the sqlcmd command line and T-SQL literal
+      ansible.builtin.set_fact:
+        _upgrade_failure_note: >-
+          {{ _upgrade_failure_raw
+             | trim
+             | regex_replace('[^A-Za-z0-9 ._:/-]', ' ')
+             | regex_replace('\s+', ' ')
+             | truncate(1900, True, '...') }}
+      delegate_to: localhost
+      run_once: true
+
     - name: Record failed upgrade in installation_history
       ansible.builtin.command: >
         {{ sqlcmd_bin }}
@@ -187,12 +211,12 @@
             INSERT INTO config.installation_history
                 (installer_version, installer_info_version, sql_server_version,
                  sql_server_edition, installation_type, previous_version,
-                 installation_status, files_executed, files_failed)
+                 installation_status, files_executed, files_failed, installation_notes)
             VALUES
                 (N'{{ _perfmon_version_clean }}', N'ansible',
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
                  N'UPGRADE', N'{{ _installed_version_clean }}', N'FAILED',
-                 0, 1);"
+                 0, 1, N'{{ _upgrade_failure_note }}');"
       delegate_to: localhost
       changed_when: true
       failed_when: false

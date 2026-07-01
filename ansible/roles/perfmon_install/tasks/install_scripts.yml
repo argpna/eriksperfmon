@@ -29,26 +29,13 @@
   delegate_to: localhost
   run_once: true
 
-- name: Run install scripts
-  ansible.builtin.command: >
-    {{ sqlcmd_bin }}
-    -S {{ _mssql_server }}
-    -U {{ mssql_sa_user }}
-    -P "{{ mssql_sa_password }}"
-    -d master
-    -C -b
-    -i "{{ item }}"
-  loop: "{{ _install_scripts }}"
-  loop_control:
-    label: "{{ item | basename }}"
-  delegate_to: localhost
-  changed_when: true
-
 - name: Determine installation type for history record
   ansible.builtin.set_fact:
     _install_type: >-
       {%- if _installed_version_clean | default('') | length == 0 -%}
         INSTALL
+      {%- elif _upgrade_needed | default(false) | bool -%}
+        UPGRADE
       {%- elif _installed_version_clean is version(_perfmon_version_clean, '==') -%}
         REINSTALL
       {%- else -%}
@@ -56,26 +43,97 @@
       {%- endif -%}
   delegate_to: localhost
   run_once: true
-  when: not (_upgrade_needed | default(false) | bool)
 
-- name: Record installation in installation_history
-  ansible.builtin.command: >
-    {{ sqlcmd_bin }}
-    -S {{ _mssql_server }}
-    -U {{ mssql_sa_user }}
-    -P "{{ mssql_sa_password }}"
-    -d "{{ perfmon_db }}"
-    -C -b
-    -Q "INSERT INTO config.installation_history
-            (installer_version, installer_info_version, sql_server_version,
-             sql_server_edition, installation_type, previous_version,
-             installation_status, files_executed, files_failed)
-        VALUES
-            (N'{{ _perfmon_version_clean }}', N'ansible',
-             @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
-             N'{{ _install_type }}',
-             {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
-             N'SUCCESS', {{ _install_scripts | length }}, 0);"
-  delegate_to: localhost
-  changed_when: true
-  when: not (_upgrade_needed | default(false) | bool)
+- name: Run install scripts and record result
+  block:
+    - name: Run install scripts
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d master
+        -C -b
+        -i "{{ item }}"
+      loop: "{{ _install_scripts }}"
+      loop_control:
+        label: "{{ item | basename }}"
+      delegate_to: localhost
+      changed_when: true
+
+    - name: Record installation in installation_history
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d "{{ perfmon_db }}"
+        -C -b
+        -Q "INSERT INTO config.installation_history
+                (installer_version, installer_info_version, sql_server_version,
+                 sql_server_edition, installation_type, previous_version,
+                 installation_status, files_executed, files_failed)
+            VALUES
+                (N'{{ _perfmon_version_clean }}', N'ansible',
+                 @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
+                 N'{{ _install_type }}',
+                 {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
+                 N'SUCCESS', {{ _install_scripts | length }}, 0);"
+      delegate_to: localhost
+      changed_when: true
+      when: not (_upgrade_needed | default(false) | bool)
+
+  rescue:
+    - name: Extract failure detail from the failed task result
+      ansible.builtin.set_fact:
+        _install_failure_raw: >-
+          {%- set res = ansible_failed_result -%}
+          {%- set failed_items = res.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | list -%}
+          {%- if failed_items | length > 0 -%}
+            {{ failed_items[0].item | basename }}: {{ failed_items[0].stderr | default(failed_items[0].msg | default('no error output')) }}
+          {%- else -%}
+            {{ res.stderr | default(res.msg | default('no error output')) }}
+          {%- endif -%}
+      delegate_to: localhost
+      run_once: true
+
+    - name: Sanitize failure detail for embedding in the sqlcmd command line and T-SQL literal
+      ansible.builtin.set_fact:
+        _install_failure_note: >-
+          {{ _install_failure_raw
+             | trim
+             | regex_replace('[^A-Za-z0-9 ._:/-]', ' ')
+             | regex_replace('\s+', ' ')
+             | truncate(1900, True, '...') }}
+      delegate_to: localhost
+      run_once: true
+
+    - name: Record failed install in installation_history
+      ansible.builtin.command: >
+        {{ sqlcmd_bin }}
+        -S {{ _mssql_server }}
+        -U {{ mssql_sa_user }}
+        -P "{{ mssql_sa_password }}"
+        -d "{{ perfmon_db }}"
+        -C -b
+        -Q "IF OBJECT_ID(N'config.installation_history') IS NOT NULL
+            INSERT INTO config.installation_history
+                (installer_version, installer_info_version, sql_server_version,
+                 sql_server_edition, installation_type, previous_version,
+                 installation_status, files_executed, files_failed, installation_notes)
+            VALUES
+                (N'{{ _perfmon_version_clean }}', N'ansible',
+                 @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
+                 N'{{ _install_type }}',
+                 {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
+                 N'FAILED', 0, 1, N'{{ _install_failure_note }}');"
+      delegate_to: localhost
+      changed_when: true
+      failed_when: false
+
+    - name: Fail after recording install failure
+      ansible.builtin.fail:
+        msg: >-
+          Install/reinstall of PerformanceMonitor {{ _perfmon_version_clean }} failed.
+          Recorded FAILED status in config.installation_history.
+          Fix the error above and re-run.
