@@ -214,25 +214,95 @@ ORDER BY ps.collection_time DESC;
     panels.append(row("Plan XML", 40))
     panels.append(
         table(
-            "Execution plan XML",
+            "Execution plan XML (one row per distinct plan_handle)",
             0,
             41,
             24,
             12,
             f"""
-SELECT TOP (1)
-    ps.collection_time,
+-- Mirrors query_history.py's plan_ranges pattern. collect.procedure_stats has no
+-- query_plan_hash (sys.dm_exec_procedure_stats doesn't expose one, unlike
+-- sys.dm_exec_query_stats) so plan_handle is the distinct-plan-shape key here instead:
+-- each recompile gets a new plan_handle.
+WITH plan_ranges AS (
+    SELECT
+        ps.plan_handle,
+        plan_first_seen      = MIN(ps.collection_time),
+        plan_last_seen       = MAX(ps.collection_time),
+        latest_time          = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_time END),
+        latest_collection_id = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_id  END)
+    FROM collect.procedure_stats AS ps
+    WHERE {ps_filter}
+    GROUP BY ps.plan_handle
+    HAVING MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1
+)
+SELECT
+    plan_handle = CONVERT(varchar(130), pr.plan_handle, 1),
+    pr.plan_first_seen,
+    pr.plan_last_seen,
     plan_xml = CAST(DECOMPRESS(ps.query_plan_text) AS nvarchar(max))
-FROM collect.procedure_stats AS ps
-WHERE {ps_filter}
-    AND ps.query_plan_text IS NOT NULL
-ORDER BY ps.collection_time DESC;
+FROM plan_ranges AS pr
+JOIN collect.procedure_stats AS ps
+    ON ps.collection_time = pr.latest_time
+    AND ps.collection_id  = pr.latest_collection_id
+ORDER BY pr.plan_last_seen DESC;
 """,
             description=(
-                "Most recent execution plan for the selected procedure within the time range. "
+                "One row per distinct plan_handle seen in the time range. "
+                "Correlate plan_handle with the Raw collection snapshots table above to see which plan was active at a given collection. "
+                "Multiple rows indicate recompiles - check cached_time in the raw snapshots to see when. "
                 "To export: click the panel menu (three dots, top-right) -> Inspect -> Data -> Download CSV. "
                 "The plan_xml column contains the complete XML showplan. "
                 "Save the cell content with a .sqlplan extension and open in SSMS."
+            ),
+        )
+    )
+
+    panels.append(
+        table(
+            "Query parameters (compiled values, one row per distinct plan_handle)",
+            0,
+            53,
+            24,
+            8,
+            f"""
+SET QUOTED_IDENTIFIER ON;
+WITH plan_ranges AS (
+    SELECT
+        ps.plan_handle,
+        plan_last_seen       = MAX(ps.collection_time),
+        latest_time          = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_time END),
+        latest_collection_id = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_id  END)
+    FROM collect.procedure_stats AS ps
+    WHERE {ps_filter}
+    GROUP BY ps.plan_handle
+    HAVING MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1
+),
+plan_xml AS (
+    SELECT
+        pr.plan_handle,
+        pr.plan_last_seen,
+        plan_xml = CONVERT(xml, CAST(DECOMPRESS(ps.query_plan_text) AS nvarchar(max)))
+    FROM plan_ranges AS pr
+    JOIN collect.procedure_stats AS ps
+        ON ps.collection_time = pr.latest_time
+        AND ps.collection_id  = pr.latest_collection_id
+)
+SELECT
+    plan_handle     = CONVERT(varchar(130), px.plan_handle, 1),
+    px.plan_last_seen,
+    param_name      = p.value('@Column', 'nvarchar(128)'),
+    data_type       = p.value('@ParameterDataType', 'nvarchar(128)'),
+    compiled_value  = p.value('@ParameterCompiledValue', 'nvarchar(max)')
+FROM plan_xml AS px
+CROSS APPLY px.plan_xml.nodes('declare namespace sp="http://schemas.microsoft.com/sqlserver/2004/07/showplan"; //sp:ParameterList/sp:ColumnReference') AS t(p)
+ORDER BY px.plan_last_seen DESC;
+""",
+            description=(
+                "One row per parameter per distinct plan_handle seen in the time range. compiled_value is the value "
+                "bound when that plan was compiled, not a per-execution history - it only changes on recompile. "
+                "Runtime parameter values are not captured historically anywhere upstream (only available live, "
+                "for a currently-executing session, via sys.dm_exec_query_statistics_xml) so they cannot appear here."
             ),
         )
     )

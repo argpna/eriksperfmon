@@ -709,7 +709,7 @@
     {
       "id": 15,
       "type": "table",
-      "title": "Execution plan XML",
+      "title": "Execution plan XML (one row per distinct plan_handle)",
       "datasource": {
         "type": "mssql",
         "uid": "${instance}"
@@ -762,10 +762,71 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "\nSELECT TOP (1)\n    ps.collection_time,\n    plan_xml = CAST(DECOMPRESS(ps.query_plan_text) AS nvarchar(max))\nFROM collect.procedure_stats AS ps\nWHERE ps.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND ps.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND (N'${database}' = N'' OR ps.database_name = N'${database}')\nAND (N'${schema_name}' = N'' OR ps.schema_name = N'${schema_name}')\nAND (N'${procedure_name}' = N'' OR ps.object_name = N'${procedure_name}')\n    AND ps.query_plan_text IS NOT NULL\nORDER BY ps.collection_time DESC;\n"
+          "rawSql": "\n-- Mirrors query_history.py's plan_ranges pattern. collect.procedure_stats has no\n-- query_plan_hash (sys.dm_exec_procedure_stats doesn't expose one, unlike\n-- sys.dm_exec_query_stats) so plan_handle is the distinct-plan-shape key here instead:\n-- each recompile gets a new plan_handle.\nWITH plan_ranges AS (\n    SELECT\n        ps.plan_handle,\n        plan_first_seen      = MIN(ps.collection_time),\n        plan_last_seen       = MAX(ps.collection_time),\n        latest_time          = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_time END),\n        latest_collection_id = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_id  END)\n    FROM collect.procedure_stats AS ps\n    WHERE ps.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND ps.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND (N'${database}' = N'' OR ps.database_name = N'${database}')\nAND (N'${schema_name}' = N'' OR ps.schema_name = N'${schema_name}')\nAND (N'${procedure_name}' = N'' OR ps.object_name = N'${procedure_name}')\n    GROUP BY ps.plan_handle\n    HAVING MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1\n)\nSELECT\n    plan_handle = CONVERT(varchar(130), pr.plan_handle, 1),\n    pr.plan_first_seen,\n    pr.plan_last_seen,\n    plan_xml = CAST(DECOMPRESS(ps.query_plan_text) AS nvarchar(max))\nFROM plan_ranges AS pr\nJOIN collect.procedure_stats AS ps\n    ON ps.collection_time = pr.latest_time\n    AND ps.collection_id  = pr.latest_collection_id\nORDER BY pr.plan_last_seen DESC;\n"
         }
       ],
-      "description": "Most recent execution plan for the selected procedure within the time range. To export: click the panel menu (three dots, top-right) -> Inspect -> Data -> Download CSV. The plan_xml column contains the complete XML showplan. Save the cell content with a .sqlplan extension and open in SSMS."
+      "description": "One row per distinct plan_handle seen in the time range. Correlate plan_handle with the Raw collection snapshots table above to see which plan was active at a given collection. Multiple rows indicate recompiles - check cached_time in the raw snapshots to see when. To export: click the panel menu (three dots, top-right) -> Inspect -> Data -> Download CSV. The plan_xml column contains the complete XML showplan. Save the cell content with a .sqlplan extension and open in SSMS."
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Query parameters (compiled values, one row per distinct plan_handle)",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSET QUOTED_IDENTIFIER ON;\nWITH plan_ranges AS (\n    SELECT\n        ps.plan_handle,\n        plan_last_seen       = MAX(ps.collection_time),\n        latest_time          = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_time END),\n        latest_collection_id = MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN ps.collection_id  END)\n    FROM collect.procedure_stats AS ps\n    WHERE ps.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND ps.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nAND (N'${database}' = N'' OR ps.database_name = N'${database}')\nAND (N'${schema_name}' = N'' OR ps.schema_name = N'${schema_name}')\nAND (N'${procedure_name}' = N'' OR ps.object_name = N'${procedure_name}')\n    GROUP BY ps.plan_handle\n    HAVING MAX(CASE WHEN ps.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1\n),\nplan_xml AS (\n    SELECT\n        pr.plan_handle,\n        pr.plan_last_seen,\n        plan_xml = CONVERT(xml, CAST(DECOMPRESS(ps.query_plan_text) AS nvarchar(max)))\n    FROM plan_ranges AS pr\n    JOIN collect.procedure_stats AS ps\n        ON ps.collection_time = pr.latest_time\n        AND ps.collection_id  = pr.latest_collection_id\n)\nSELECT\n    plan_handle     = CONVERT(varchar(130), px.plan_handle, 1),\n    px.plan_last_seen,\n    param_name      = p.value('@Column', 'nvarchar(128)'),\n    data_type       = p.value('@ParameterDataType', 'nvarchar(128)'),\n    compiled_value  = p.value('@ParameterCompiledValue', 'nvarchar(max)')\nFROM plan_xml AS px\nCROSS APPLY px.plan_xml.nodes('declare namespace sp=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"; //sp:ParameterList/sp:ColumnReference') AS t(p)\nORDER BY px.plan_last_seen DESC;\n"
+        }
+      ],
+      "description": "One row per parameter per distinct plan_handle seen in the time range. compiled_value is the value bound when that plan was compiled, not a per-execution history - it only changes on recompile. Runtime parameter values are not captured historically anywhere upstream (only available live, for a currently-executing session, via sys.dm_exec_query_statistics_xml) so they cannot appear here."
     }
   ]
 }

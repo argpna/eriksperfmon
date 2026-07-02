@@ -51,12 +51,72 @@ ORDER BY qs.collection_time;
         )
     )
 
-    panels.append(row("I/O & Executions", 9))
+    panels.append(row("Average Per Execution", 9))
+    panels.append(
+        timeseries(
+            "Avg CPU & elapsed time per execution",
+            0,
+            10,
+            8,
+            8,
+            [target(f"""
+SELECT
+    time = qs.collection_time,
+    avg_cpu_ms = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_worker_time) / 1000.0 / SUM(qs.execution_count) END,
+    avg_elapsed_ms = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_elapsed_time) / 1000.0 / SUM(qs.execution_count) END
+FROM collect.query_stats AS qs
+WHERE {qh_filter}
+GROUP BY qs.collection_time
+ORDER BY qs.collection_time;
+""")],
+            unit="ms",
+        )
+    )
+    panels.append(
+        timeseries(
+            "Avg logical reads & writes per execution",
+            8,
+            10,
+            8,
+            8,
+            [target(f"""
+SELECT
+    time = qs.collection_time,
+    avg_logical_reads = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_logical_reads) / 1.0 / SUM(qs.execution_count) END,
+    avg_logical_writes = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_logical_writes) / 1.0 / SUM(qs.execution_count) END
+FROM collect.query_stats AS qs
+WHERE {qh_filter}
+GROUP BY qs.collection_time
+ORDER BY qs.collection_time;
+""")],
+        )
+    )
+    panels.append(
+        timeseries(
+            "Avg physical reads & rows per execution",
+            16,
+            10,
+            8,
+            8,
+            [target(f"""
+SELECT
+    time = qs.collection_time,
+    avg_physical_reads = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_physical_reads) / 1.0 / SUM(qs.execution_count) END,
+    avg_rows = CASE WHEN SUM(qs.execution_count) > 0 THEN SUM(qs.total_rows) / 1.0 / SUM(qs.execution_count) END
+FROM collect.query_stats AS qs
+WHERE {qh_filter}
+GROUP BY qs.collection_time
+ORDER BY qs.collection_time;
+""")],
+        )
+    )
+
+    panels.append(row("I/O & Executions", 18))
     panels.append(
         timeseries(
             "Execution count per collection interval",
             0,
-            10,
+            19,
             8,
             8,
             [target(f"""
@@ -72,7 +132,7 @@ ORDER BY qs.collection_time;
         timeseries(
             "Logical reads per collection interval",
             8,
-            10,
+            19,
             8,
             8,
             [target(f"""
@@ -88,7 +148,7 @@ ORDER BY qs.collection_time;
         timeseries(
             "Physical reads & logical writes per interval",
             16,
-            10,
+            19,
             8,
             8,
             [target(f"""
@@ -104,12 +164,12 @@ ORDER BY qs.collection_time;
         )
     )
 
-    panels.append(row("Resource Usage", 18))
+    panels.append(row("Resource Usage", 27))
     panels.append(
         timeseries(
             "Rows returned (min/max per snapshot)",
             0,
-            19,
+            28,
             8,
             8,
             [target(f"""
@@ -128,7 +188,7 @@ ORDER BY qs.collection_time;
         timeseries(
             "Degree of parallelism (min/max per snapshot)",
             8,
-            19,
+            28,
             8,
             8,
             [target(f"""
@@ -147,7 +207,7 @@ ORDER BY qs.collection_time;
         timeseries(
             "Memory grant & spills (min/max per snapshot)",
             16,
-            19,
+            28,
             8,
             8,
             [target(f"""
@@ -165,12 +225,12 @@ ORDER BY qs.collection_time;
         )
     )
 
-    panels.append(row("Collection History", 27))
+    panels.append(row("Collection History", 36))
     panels.append(
         table(
             "Raw collection snapshots",
             0,
-            28,
+            37,
             24,
             12,
             f"""
@@ -192,18 +252,24 @@ SELECT TOP (500)
     total_cpu_ms = qs.total_worker_time / 1000,
     min_cpu_ms = CONVERT(decimal(19,2), qs.min_worker_time / 1000.0),
     max_cpu_ms = CONVERT(decimal(19,2), qs.max_worker_time / 1000.0),
+    avg_cpu_ms = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_worker_time / 1000.0 / qs.execution_count) END,
     total_elapsed_ms = qs.total_elapsed_time / 1000,
     min_elapsed_ms = CONVERT(decimal(19,2), qs.min_elapsed_time / 1000.0),
     max_elapsed_ms = CONVERT(decimal(19,2), qs.max_elapsed_time / 1000.0),
+    avg_elapsed_ms = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_elapsed_time / 1000.0 / qs.execution_count) END,
     qs.total_logical_reads,
+    avg_logical_reads = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_logical_reads / 1.0 / qs.execution_count) END,
     qs.total_physical_reads,
     qs.min_physical_reads,
     qs.max_physical_reads,
+    avg_physical_reads = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_physical_reads / 1.0 / qs.execution_count) END,
     qs.total_logical_writes,
+    avg_logical_writes = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_logical_writes / 1.0 / qs.execution_count) END,
     qs.total_clr_time,
     qs.total_rows,
     qs.min_rows,
     qs.max_rows,
+    avg_rows = CASE WHEN qs.execution_count > 0 THEN CONVERT(decimal(19,4), qs.total_rows / 1.0 / qs.execution_count) END,
     qs.min_dop,
     qs.max_dop,
     qs.min_grant_kb,
@@ -231,12 +297,12 @@ ORDER BY qs.collection_time DESC;
         )
     )
 
-    panels.append(row("Plan XML", 40))
+    panels.append(row("Plan XML", 49))
     panels.append(
         table(
             "Execution plan XML (one row per distinct plan shape)",
             0,
-            41,
+            50,
             24,
             12,
             f"""
@@ -273,6 +339,55 @@ ORDER BY pr.plan_last_seen DESC;
                 "Correlate query_plan_hash with the Raw collection snapshots table above to see which plan was active at a given collection. "
                 "Multiple rows indicate plan instability or PSP. "
                 "To export: Inspect -> Data -> Download CSV, save plan_xml as a .sqlplan file, open in SSMS."
+            ),
+        )
+    )
+
+    panels.append(
+        table(
+            "Query parameters (compiled values, one row per distinct plan shape)",
+            0,
+            62,
+            24,
+            8,
+            f"""
+SET QUOTED_IDENTIFIER ON;
+WITH plan_ranges AS (
+    SELECT
+        qs.query_plan_hash,
+        plan_last_seen       = MAX(qs.collection_time),
+        latest_time          = MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN qs.collection_time END),
+        latest_collection_id = MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN qs.collection_id  END)
+    FROM collect.query_stats AS qs
+    WHERE {qh_filter}
+    GROUP BY qs.query_plan_hash
+    HAVING MAX(CASE WHEN qs.query_plan_text IS NOT NULL THEN 1 ELSE 0 END) = 1
+),
+plan_xml AS (
+    SELECT
+        pr.query_plan_hash,
+        pr.plan_last_seen,
+        plan_xml = CONVERT(xml, CAST(DECOMPRESS(qs.query_plan_text) AS nvarchar(max)))
+    FROM plan_ranges AS pr
+    JOIN collect.query_stats AS qs
+        ON qs.collection_time = pr.latest_time
+        AND qs.collection_id  = pr.latest_collection_id
+)
+SELECT
+    query_plan_hash = CONVERT(varchar(20), px.query_plan_hash, 1),
+    px.plan_last_seen,
+    param_name      = p.value('@Column', 'nvarchar(128)'),
+    data_type       = p.value('@ParameterDataType', 'nvarchar(128)'),
+    compiled_value  = p.value('@ParameterCompiledValue', 'nvarchar(max)')
+FROM plan_xml AS px
+CROSS APPLY px.plan_xml.nodes('declare namespace sp="http://schemas.microsoft.com/sqlserver/2004/07/showplan"; //sp:ParameterList/sp:ColumnReference') AS t(p)
+ORDER BY px.plan_last_seen DESC;
+""",
+            description=(
+                "One row per parameter per distinct plan shape. compiled_value is the value bound when the plan "
+                "was compiled, not a per-execution history and only changes on recompile. "
+                "Runtime parameter values are not captured historically anywhere upstream (only available live, "
+                "for a currently-executing session, via sys.dm_exec_query_statistics_xml) so they do not appear here."
             ),
         )
     )
