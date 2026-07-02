@@ -1,0 +1,25 @@
+[MAIN]
+source-roots=scripts
+
+[FORMAT]
+max-line-length=300
+
+[MESSAGES CONTROL]
+disable=
+    missing-function-docstring,
+    missing-module-docstring,
+    too-many-arguments,
+    too-many-positional-arguments,
+    invalid-name,
+    global-statement,
+    too-many-lines,
+    line-too-long,
+    duplicate-code,
+    wildcard-import,
+    unused-wildcard-import,
+
+[DESIGN]
+max-args=15
+max-positional-arguments=15
+max-locals=25
+max-statements=80
