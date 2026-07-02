@@ -1094,6 +1094,48 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "event_time"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Drill down: queries +/-20min around this spike",
+                    "url": "/d/perfmon-queries?from=${__data.fields.window_from_ms}&to=${__data.fields.window_to_ms}&var-instance=${instance}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "window_from_ms"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "window_to_ms"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
           }
         ]
       },
@@ -1123,7 +1165,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "\nSELECT TOP (50)\n    cs.event_time,\n    cs.sql_server_cpu,\n    cs.other_process_cpu,\n    cs.total_cpu,\n    cs.severity\nFROM report.cpu_spikes AS cs\nWHERE cs.event_time >= DATEADD(HOUR, -48, SYSDATETIME())\n    AND cs.sql_server_cpu >= 60\nORDER BY cs.event_time DESC;\n"
+          "rawSql": "\nSELECT TOP (50)\n    cs.event_time,\n    cs.sql_server_cpu,\n    cs.other_process_cpu,\n    cs.total_cpu,\n    cs.severity,\n    window_from_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, -20, cs.event_time)),\n    window_to_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, 20, cs.event_time))\nFROM report.cpu_spikes AS cs\nWHERE cs.event_time >= DATEADD(HOUR, -48, SYSDATETIME())\n    AND cs.sql_server_cpu >= 60\nORDER BY cs.event_time DESC;\n"
         }
       ]
     },
@@ -1311,6 +1353,136 @@
     },
     {
       "id": 21,
+      "type": "table",
+      "title": "Server configuration changes",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 103
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "change_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    scc.change_time,\n    scc.configuration_name,\n    scc.old_value_configured,\n    scc.new_value_configured,\n    scc.old_value_in_use,\n    scc.new_value_in_use,\n    scc.requires_restart,\n    scc.is_dynamic,\n    scc.is_advanced,\n    scc.description,\n    scc.change_description\nFROM report.server_configuration_changes AS scc\nWHERE scc.change_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND scc.change_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY scc.change_time DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Database configuration changes",
+      "datasource": {
+        "type": "mssql",
+        "uid": "${instance}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 112
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "change_time",
+            "desc": true
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "${instance}"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "\nSELECT TOP (100)\n    dcc.change_time,\n    dcc.database_name,\n    dcc.setting_type,\n    dcc.setting_name,\n    dcc.old_value,\n    dcc.new_value,\n    dcc.change_description\nFROM report.database_configuration_changes AS dcc\nWHERE dcc.change_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND dcc.change_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY dcc.change_time DESC;\n"
+        }
+      ]
+    },
+    {
+      "id": 23,
       "type": "row",
       "title": "Recommendations",
       "collapsed": false,
@@ -1323,7 +1495,7 @@
       "panels": []
     },
     {
-      "id": 22,
+      "id": 24,
       "type": "table",
       "title": "Critical issues",
       "datasource": {
@@ -1391,6 +1563,72 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "problem_area"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Investigate in dashboard",
+                    "url": "${__data.fields.problem_area_url}?${__data.fields.problem_area_qs}from=${__data.fields.window_from_ms}&to=${__data.fields.window_to_ms}&var-instance=${instance}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "problem_area_url"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "problem_area_qs"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "window_from_ms"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "window_to_ms"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
           }
         ]
       },
@@ -1420,12 +1658,12 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "\nSELECT TOP (100)\n    ci.issue_id,\n    ci.log_date,\n    ci.severity,\n    ci.problem_area,\n    ci.source_collector,\n    ci.affected_database,\n    ci.message,\n    ci.investigate_query,\n    ci.threshold_value,\n    ci.threshold_limit\nFROM config.critical_issues AS ci\nWHERE ci.log_date >= DATEADD(HOUR, -24, SYSDATETIME())\nORDER BY ci.log_date DESC;\n"
+          "rawSql": "\nSELECT TOP (100)\n    ci.issue_id,\n    ci.log_date,\n    ci.severity,\n    ci.problem_area,\n    ci.source_collector,\n    ci.affected_database,\n    ci.message,\n    ci.investigate_query,\n    ci.threshold_value,\n    ci.threshold_limit,\n    problem_area_url =\n        CASE ci.problem_area\n            WHEN N'Blocking' THEN N'/d/perfmon-blocking'\n            WHEN N'Deadlocking' THEN N'/d/perfmon-blocking'\n            WHEN N'Blocking and Deadlocking' THEN N'/d/perfmon-blocking'\n            WHEN N'Query Store Configuration' THEN N'/d/perfmon-queries'\n            WHEN N'Memory Clerk Growth' THEN N'/d/perfmon-memory'\n            WHEN N'SQL Server Stability' THEN N'/d/perfmon-system-events'\n            WHEN N'Database Configuration' THEN N'/d/perfmon-instance'\n            WHEN N'Server Configuration' THEN N'/d/perfmon-instance'\n            ELSE N'/d/perfmon-instance'\n        END,\n    problem_area_qs =\n        CASE ci.problem_area\n            WHEN N'Database Configuration' THEN N'viewPanel=22&'\n            WHEN N'Server Configuration' THEN N'viewPanel=21&'\n            ELSE N''\n        END,\n    window_from_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, -20, ci.log_date)),\n    window_to_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, 20, ci.log_date))\nFROM config.critical_issues AS ci\nWHERE ci.log_date >= DATEADD(HOUR, -24, SYSDATETIME())\nORDER BY ci.log_date DESC;\n"
         }
       ]
     },
     {
-      "id": 23,
+      "id": 25,
       "type": "row",
       "title": "Default Trace",
       "collapsed": false,
@@ -1438,7 +1676,7 @@
       "panels": []
     },
     {
-      "id": 24,
+      "id": 26,
       "type": "table",
       "title": "Default trace events",
       "datasource": {
@@ -1503,7 +1741,7 @@
       ]
     },
     {
-      "id": 25,
+      "id": 27,
       "type": "row",
       "title": "Current Configuration",
       "collapsed": false,
@@ -1516,7 +1754,7 @@
       "panels": []
     },
     {
-      "id": 26,
+      "id": 28,
       "type": "table",
       "title": "Server configuration (latest values)",
       "datasource": {
@@ -1576,7 +1814,7 @@
       ]
     },
     {
-      "id": 27,
+      "id": 29,
       "type": "table",
       "title": "Database configuration (latest values)",
       "datasource": {
@@ -1636,7 +1874,7 @@
       ]
     },
     {
-      "id": 28,
+      "id": 30,
       "type": "table",
       "title": "Trace flags (latest values)",
       "datasource": {
@@ -1696,7 +1934,7 @@
       ]
     },
     {
-      "id": 29,
+      "id": 31,
       "type": "row",
       "title": "Configuration Changes",
       "collapsed": false,
@@ -1707,136 +1945,6 @@
         "y": 102
       },
       "panels": []
-    },
-    {
-      "id": 30,
-      "type": "table",
-      "title": "Server configuration changes",
-      "datasource": {
-        "type": "mssql",
-        "uid": "${instance}"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
-        "y": 103
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": true
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "fields": ""
-        },
-        "sortBy": [
-          {
-            "displayName": "change_time",
-            "desc": true
-          }
-        ]
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "mssql",
-            "uid": "${instance}"
-          },
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "\nSELECT TOP (100)\n    scc.change_time,\n    scc.configuration_name,\n    scc.old_value_configured,\n    scc.new_value_configured,\n    scc.old_value_in_use,\n    scc.new_value_in_use,\n    scc.requires_restart,\n    scc.is_dynamic,\n    scc.is_advanced,\n    scc.description,\n    scc.change_description\nFROM report.server_configuration_changes AS scc\nWHERE scc.change_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND scc.change_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY scc.change_time DESC;\n"
-        }
-      ]
-    },
-    {
-      "id": 31,
-      "type": "table",
-      "title": "Database configuration changes",
-      "datasource": {
-        "type": "mssql",
-        "uid": "${instance}"
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 112
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": true
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "fields": ""
-        },
-        "sortBy": [
-          {
-            "displayName": "change_time",
-            "desc": true
-          }
-        ]
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "mssql",
-            "uid": "${instance}"
-          },
-          "format": "table",
-          "rawQuery": true,
-          "rawSql": "\nSELECT TOP (100)\n    dcc.change_time,\n    dcc.database_name,\n    dcc.setting_type,\n    dcc.setting_name,\n    dcc.old_value,\n    dcc.new_value,\n    dcc.change_description\nFROM report.database_configuration_changes AS dcc\nWHERE dcc.change_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND dcc.change_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\nORDER BY dcc.change_time DESC;\n"
-        }
-      ]
     },
     {
       "id": 32,

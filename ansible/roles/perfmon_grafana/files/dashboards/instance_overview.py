@@ -215,6 +215,20 @@ ORDER BY SUM(fio.io_stall_ms_delta) DESC;
         )
     )
     # No direct upstream sub-tab equivalent. CPU spike and scheduler analysis folded into Resource Overview for practical value
+    dl_cpu_spike = col_datalink(
+        "event_time",
+        "Drill down: queries +/-20min around this spike",
+        "/d/perfmon-queries?from=${__data.fields.window_from_ms}&to=${__data.fields.window_to_ms}"
+        "&var-instance=${instance}",
+    )
+    hide_window_from = {
+        "matcher": {"id": "byName", "options": "window_from_ms"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
+    hide_window_to = {
+        "matcher": {"id": "byName", "options": "window_to_ms"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
     panels.append(
         table(
             "CPU spike events (last 48h)",
@@ -228,7 +242,9 @@ SELECT TOP (50)
     cs.sql_server_cpu,
     cs.other_process_cpu,
     cs.total_cpu,
-    cs.severity
+    cs.severity,
+    window_from_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, -20, cs.event_time)),
+    window_to_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, 20, cs.event_time))
 FROM report.cpu_spikes AS cs
 WHERE cs.event_time >= DATEADD(HOUR, -48, SYSDATETIME())
     AND cs.sql_server_cpu >= 60
@@ -243,7 +259,10 @@ ORDER BY cs.event_time DESC;
                         "MEDIUM": "orange",
                         "LOW": "green",
                     },
-                )
+                ),
+                dl_cpu_spike,
+                hide_window_from,
+                hide_window_to,
             ],
             sort_by=[{"displayName": "event_time", "desc": True}],
         )
@@ -301,8 +320,80 @@ FROM report.scheduler_cpu_analysis AS sca;
         )
     )
 
+    pnl_server_cfg_changes = table(
+        "Server configuration changes",
+        0,
+        103,
+        24,
+        9,
+        """
+SELECT TOP (100)
+    scc.change_time,
+    scc.configuration_name,
+    scc.old_value_configured,
+    scc.new_value_configured,
+    scc.old_value_in_use,
+    scc.new_value_in_use,
+    scc.requires_restart,
+    scc.is_dynamic,
+    scc.is_advanced,
+    scc.description,
+    scc.change_description
+FROM report.server_configuration_changes AS scc
+WHERE $__timeFilter(scc.change_time)
+ORDER BY scc.change_time DESC;
+""",
+        sort_by=[{"displayName": "change_time", "desc": True}],
+    )
+    pnl_db_cfg_changes = table(
+        "Database configuration changes",
+        0,
+        112,
+        12,
+        9,
+        """
+SELECT TOP (100)
+    dcc.change_time,
+    dcc.database_name,
+    dcc.setting_type,
+    dcc.setting_name,
+    dcc.old_value,
+    dcc.new_value,
+    dcc.change_description
+FROM report.database_configuration_changes AS dcc
+WHERE $__timeFilter(dcc.change_time)
+ORDER BY dcc.change_time DESC;
+""",
+        sort_by=[{"displayName": "change_time", "desc": True}],
+    )
+    panels.append(pnl_server_cfg_changes)
+    panels.append(pnl_db_cfg_changes)
+
     # Upstream tab: Overview, sub-tab: Recommendations
     panels.append(row("Recommendations", 62))
+    dl_problem_area = col_datalink(
+        "problem_area",
+        "Investigate in dashboard",
+        "${__data.fields.problem_area_url}?${__data.fields.problem_area_qs}"
+        "from=${__data.fields.window_from_ms}&to=${__data.fields.window_to_ms}"
+        "&var-instance=${instance}",
+    )
+    hide_problem_area_url = {
+        "matcher": {"id": "byName", "options": "problem_area_url"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
+    hide_problem_area_qs = {
+        "matcher": {"id": "byName", "options": "problem_area_qs"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
+    hide_problem_area_window_from = {
+        "matcher": {"id": "byName", "options": "window_from_ms"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
+    hide_problem_area_window_to = {
+        "matcher": {"id": "byName", "options": "window_to_ms"},
+        "properties": [{"id": "custom.hidden", "value": True}],
+    }
     panels.append(
         table(
             "Critical issues",
@@ -310,7 +401,7 @@ FROM report.scheduler_cpu_analysis AS sca;
             63,
             24,
             9,
-            """
+            f"""
 SELECT TOP (100)
     ci.issue_id,
     ci.log_date,
@@ -321,7 +412,27 @@ SELECT TOP (100)
     ci.message,
     ci.investigate_query,
     ci.threshold_value,
-    ci.threshold_limit
+    ci.threshold_limit,
+    problem_area_url =
+        CASE ci.problem_area
+            WHEN N'Blocking' THEN N'/d/perfmon-blocking'
+            WHEN N'Deadlocking' THEN N'/d/perfmon-blocking'
+            WHEN N'Blocking and Deadlocking' THEN N'/d/perfmon-blocking'
+            WHEN N'Query Store Configuration' THEN N'/d/perfmon-queries'
+            WHEN N'Memory Clerk Growth' THEN N'/d/perfmon-memory'
+            WHEN N'SQL Server Stability' THEN N'/d/perfmon-system-events'
+            WHEN N'Database Configuration' THEN N'/d/perfmon-instance'
+            WHEN N'Server Configuration' THEN N'/d/perfmon-instance'
+            ELSE N'/d/perfmon-instance'
+        END,
+    problem_area_qs =
+        CASE ci.problem_area
+            WHEN N'Database Configuration' THEN N'viewPanel={pnl_db_cfg_changes["id"]}&'
+            WHEN N'Server Configuration' THEN N'viewPanel={pnl_server_cfg_changes["id"]}&'
+            ELSE N''
+        END,
+    window_from_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, -20, ci.log_date)),
+    window_to_ms = DATEDIFF_BIG(MILLISECOND, '19700101', DATEADD(MINUTE, 20, ci.log_date))
 FROM config.critical_issues AS ci
 WHERE ci.log_date >= DATEADD(HOUR, -24, SYSDATETIME())
 ORDER BY ci.log_date DESC;
@@ -329,7 +440,12 @@ ORDER BY ci.log_date DESC;
             overrides=[
                 status_colors(
                     "severity", {"CRITICAL": "red", "WARNING": "orange", "INFO": "blue"}
-                )
+                ),
+                dl_problem_area,
+                hide_problem_area_url,
+                hide_problem_area_qs,
+                hide_problem_area_window_from,
+                hide_problem_area_window_to,
             ],
             sort_by=[{"displayName": "log_date", "desc": True}],
         )
@@ -466,56 +582,6 @@ ORDER BY x.trace_flag;
 
     # Upstream tab: Overview, sub-tab: Configuration Changes
     panels.append(row("Configuration Changes", 102))
-    panels.append(
-        table(
-            "Server configuration changes",
-            0,
-            103,
-            24,
-            9,
-            """
-SELECT TOP (100)
-    scc.change_time,
-    scc.configuration_name,
-    scc.old_value_configured,
-    scc.new_value_configured,
-    scc.old_value_in_use,
-    scc.new_value_in_use,
-    scc.requires_restart,
-    scc.is_dynamic,
-    scc.is_advanced,
-    scc.description,
-    scc.change_description
-FROM report.server_configuration_changes AS scc
-WHERE $__timeFilter(scc.change_time)
-ORDER BY scc.change_time DESC;
-""",
-            sort_by=[{"displayName": "change_time", "desc": True}],
-        )
-    )
-    panels.append(
-        table(
-            "Database configuration changes",
-            0,
-            112,
-            12,
-            9,
-            """
-SELECT TOP (100)
-    dcc.change_time,
-    dcc.database_name,
-    dcc.setting_type,
-    dcc.setting_name,
-    dcc.old_value,
-    dcc.new_value,
-    dcc.change_description
-FROM report.database_configuration_changes AS dcc
-WHERE $__timeFilter(dcc.change_time)
-ORDER BY dcc.change_time DESC;
-""",
-            sort_by=[{"displayName": "change_time", "desc": True}],
-        )
-    )
     panels.append(
         table(
             "Trace flag changes",
