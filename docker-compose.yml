@@ -1,0 +1,131 @@
+name: eriksperfmon
+
+x-mssql-env: &mssql-env
+  ACCEPT_EULA: "Y"
+  MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+  MSSQL_PID: Developer
+  MSSQL_AGENT_ENABLED: "true"
+  TZ: America/New_York
+  MSSQL_MEMORY_LIMIT_MB: "1536"
+
+x-mssql-deploy: &mssql-deploy
+  deploy:
+    resources:
+      limits:
+        memory: 2g
+
+x-healthcheck-modern: &healthcheck-modern
+  test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q 'SELECT 1' -o /dev/null"]
+  interval: 10s
+  timeout: 10s
+  retries: 30
+  start_period: 30s
+
+services:
+  mssql-2022:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: perfmon-mssql-2022
+    <<: *mssql-deploy
+    cpuset: "0,1"
+    environment:
+      <<: *mssql-env
+    healthcheck:
+      <<: *healthcheck-modern
+    ports:
+      - "14333:1433"
+    volumes:
+      - mssql-2022-data:/var/opt/mssql
+
+  mssql-2025:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: perfmon-mssql-2025
+    <<: *mssql-deploy
+    environment:
+      <<: *mssql-env
+    healthcheck:
+      <<: *healthcheck-modern
+    ports:
+      - "14334:1433"
+    volumes:
+      - mssql-2025-data:/var/opt/mssql
+
+  ansible-runner:
+    build:
+      context: .
+      dockerfile: docker/ansible-runner/Dockerfile
+    container_name: perfmon-ansible-runner
+    depends_on:
+      mssql-2022:
+        condition: service_healthy
+      mssql-2025:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      GRAFANA_READER_PASSWORD: ${GRAFANA_READER_PASSWORD}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_ADMIN_USER: admin
+    volumes:
+      - ./.env:/workspace/.env
+      - ./ansible:/workspace/ansible
+      - ./bootstrap:/workspace/bootstrap:ro
+      - ./community:/workspace/community:ro
+      - ./patches:/workspace/patches:ro
+      - ./scripts:/workspace/scripts:ro
+    restart: "no"
+
+  # demo workload against mssql-2022
+  workload:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: perfmon-workload
+    depends_on:
+      mssql-2022:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      TARGET_HOST: mssql-2022
+    entrypoint: ["/bin/bash", "/scripts/workload.sh"]
+    volumes:
+      - ./scripts/workload.sh:/scripts/workload.sh:ro
+    restart: unless-stopped
+
+  # memory-pressure workload against mssql-2025
+  workload-memory:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: perfmon-workload-memory
+    depends_on:
+      mssql-2025:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      TARGET_HOST: mssql-2025
+    entrypoint: ["/bin/bash", "/scripts/workload-memory.sh"]
+    volumes:
+      - ./scripts/workload-memory.sh:/scripts/workload-memory.sh:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.9
+    container_name: perfmon-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      GF_ALERTING_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  mssql-2022-data:
+  mssql-2025-data:
+  grafana-data:
