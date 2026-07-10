@@ -1,0 +1,102 @@
+---
+# Provision one MSSQL datasource per SQL Server instance via the Grafana HTTP API.
+
+- name: Upsert datasource
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/datasources/uid/{{ perfmon_ds_uid_prefix }}-{{ _h.inventory_hostname }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    body_format: json
+    body:
+      name: "{{ perfmon_ds_name_prefix }}-{{ _h.inventory_hostname }}"
+      type: mssql
+      uid: "{{ perfmon_ds_uid_prefix }}-{{ _h.inventory_hostname }}"
+      url: >-
+        {{ (_h.ds_host | default(_h.ansible_host))
+           + ('\\' + _h.mssql_instance if _h.mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
+           + (':' + (_h.ds_port | default(_h.mssql_port)) | string if _h.ds_port is defined or _h.mssql_port is defined else '') }}
+      database: PerformanceMonitor
+      user: grafana_reader
+      secureJsonData:
+        password: "{{ mssql_reader_password }}"
+      jsonData:
+        tlsSkipVerify: true
+        encrypt: "{{ _h.ds_encrypt | default('true') }}"
+        queryTimeout: "60"
+      access: proxy
+    status_code: [200, 404]
+  loop: "{{ perfmon_instances }}"
+  loop_control:
+    label: "{{ item.inventory_hostname }}"
+  vars:
+    _h: "{{ item }}"
+  register: _ds_put
+  delegate_to: localhost
+  no_log: true
+
+- name: Create datasource if new
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/datasources"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    body_format: json
+    body:
+      name: "{{ perfmon_ds_name_prefix }}-{{ _h.inventory_hostname }}"
+      type: mssql
+      uid: "{{ perfmon_ds_uid_prefix }}-{{ _h.inventory_hostname }}"
+      url: >-
+        {{ (_h.ds_host | default(_h.ansible_host))
+           + ('\\' + _h.mssql_instance if _h.mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
+           + (':' + (_h.ds_port | default(_h.mssql_port)) | string if _h.ds_port is defined or _h.mssql_port is defined else '') }}
+      database: PerformanceMonitor
+      user: grafana_reader
+      secureJsonData:
+        password: "{{ mssql_reader_password }}"
+      jsonData:
+        tlsSkipVerify: true
+        encrypt: "{{ _h.ds_encrypt | default('true') }}"
+        queryTimeout: "120"
+      access: proxy
+    status_code: [200, 201]
+  loop: "{{ _ds_put.results | selectattr('status', 'equalto', 404) | list }}"
+  loop_control:
+    label: "{{ item.item.inventory_hostname }}"
+  vars:
+    _h: "{{ item.item }}"
+  delegate_to: localhost
+  no_log: true
+
+- name: Get all datasources
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/datasources"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200]
+  register: _all_datasources
+  delegate_to: localhost
+  no_log: true
+
+- name: Remove orphaned datasources
+  ansible.builtin.uri:
+    url: "{{ grafana_url }}/api/datasources/uid/{{ item }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ grafana_api_key }}"
+    status_code: [200, 204, 404]
+  vars:
+    _expected_uids: >-
+      {{ perfmon_instances | map(attribute='inventory_hostname')
+         | map('regex_replace', '^', perfmon_ds_uid_prefix + '-') | list }}
+  loop: >-
+    {{ _all_datasources.json
+       | selectattr('uid', 'match', '^' + perfmon_ds_uid_prefix + '-')
+       | map(attribute='uid') | list
+       | difference(_expected_uids) }}
+  loop_control:
+    label: "{{ item }}"
+  changed_when: false
+  delegate_to: localhost
+  no_log: true

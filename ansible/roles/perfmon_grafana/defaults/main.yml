@@ -1,0 +1,41 @@
+---
+grafana_url: "http://localhost:3000"
+
+grafana_folder: PerformanceMonitor
+grafana_folder_uid: perfmon
+
+perfmon_ds_name_prefix: PerfMon
+perfmon_ds_uid_prefix: perfmon-ds
+
+# Auto-discovered from the sql_servers inventory group. override with an explicit list
+perfmon_instances: "{{ groups['sql_servers'] | default([]) | map('extract', hostvars) | list }}"
+
+# Set to true to regenerate the fleet baked in static mode
+perfmon_fleet_static: false
+
+perfmon_alert_cpu_pct: 90
+perfmon_alert_blocking_s: 30
+perfmon_alert_deadlock_count: 1
+perfmon_alert_tempdb_pct: 80
+perfmon_alert_disk_free_pct: 10
+perfmon_alert_disk_free_gb: 5
+perfmon_alert_query_duration_floor_min: 30
+perfmon_alert_poison_wait_floor_ms: 500
+perfmon_alert_long_running_job_multiplier: 3
+perfmon_alert_failed_job_lookback_min: 60
+
+# Expects perfmon- prefix
+perfmon_alert_mute_timings: []
+
+# List of contact point objects. All entries should share the same name so Grafana
+# treats them as one receiver with multiple integrations.
+perfmon_alert_contact_points: []
+
+# Receiver the team=perfmon route targets. grafana-default-email always exists as a
+# Grafana built-in. Populate perfmon_alert_contact_points to use a custom receiver.
+perfmon_alert_receiver_name: grafana-default-email
+
+perfmon_alert_group_wait: 30s
+perfmon_alert_group_interval: 5m
+perfmon_alert_repeat_interval: 4h
+perfmon_alert_group_by: "team,instance,alertname"
