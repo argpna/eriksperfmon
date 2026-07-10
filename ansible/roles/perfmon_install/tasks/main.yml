@@ -1,0 +1,157 @@
+---
+- name: Validate required credentials are set
+  ansible.builtin.assert:
+    that:
+      - mssql_sa_password | default('') | length > 0
+      - perfmon_state != 'present' or mssql_reader_password | default('') | length > 0
+    fail_msg: >-
+      mssql_sa_password{{ ' and mssql_reader_password' if perfmon_state == 'present' else '' }}
+      must be set to a non-empty value. See README.md 'Required credentials'.
+    quiet: true
+  no_log: true
+
+- name: Check sqlcmd in PATH
+  ansible.builtin.command:
+    argv:
+      - which
+      - "{{ sqlcmd_bin }}"
+  register: _sqlcmd_which
+  delegate_to: localhost
+  run_once: true
+  failed_when: false
+  changed_when: false
+
+- name: Find sqlcmd at common install paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /opt/mssql-tools18/bin/sqlcmd
+    - /opt/mssql-tools/bin/sqlcmd
+  register: _sqlcmd_stat
+  delegate_to: localhost
+  run_once: true
+  when: _sqlcmd_which.rc != 0
+
+- name: Auto-set sqlcmd_bin from discovered path
+  ansible.builtin.set_fact:
+    sqlcmd_bin: "{{ (_sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | first).stat.path }}"
+  delegate_to: localhost
+  run_once: true
+  when:
+    - _sqlcmd_which.rc != 0
+    - _sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
+
+- name: Fail with install instructions if sqlcmd not found
+  ansible.builtin.fail:
+    msg: |
+      sqlcmd not found on the Ansible control node. Install Microsoft ODBC tools:
+        RHEL/Fedora:   sudo dnf install -y mssql-tools18 unixODBC-devel
+        Ubuntu/Debian: https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
+      After installing, either add /opt/mssql-tools18/bin to your PATH or set
+      sqlcmd_bin=/opt/mssql-tools18/bin/sqlcmd in your inventory/group_vars.
+  delegate_to: localhost
+  run_once: true
+  when:
+    - _sqlcmd_which.rc != 0
+    - _sqlcmd_stat.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0
+
+- name: Set derived facts
+  ansible.builtin.set_fact:
+    _perfmon_version_clean: "{{ perfmon_version | regex_replace('^v', '') }}"
+    _perfmon_zip: "{{ perfmon_tmp_dir }}/perfmon-{{ perfmon_version }}.zip"
+    _mssql_server: >-
+      {{
+        ansible_host
+        + ('\\' + mssql_instance if mssql_instance != 'MSSQLSERVER' else '')
+        + (',' + mssql_port | string if mssql_port is defined else '')
+      }}
+  delegate_to: localhost
+  run_once: false
+
+- name: Create staging directory
+  ansible.builtin.file:
+    path: "{{ perfmon_tmp_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+
+- name: Check for pre-seeded release zip
+  ansible.builtin.stat:
+    path: "{{ perfmon_community_dir }}/perfmon-{{ perfmon_version }}.zip"
+  register: _perfmon_zip_preseeded
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy pre-seeded release zip
+  ansible.builtin.copy:
+    src: "{{ perfmon_community_dir }}/perfmon-{{ perfmon_version }}.zip"
+    dest: "{{ _perfmon_zip }}"
+    mode: "0644"
+  when: _perfmon_zip_preseeded.stat.exists
+  delegate_to: localhost
+  run_once: true
+
+- name: Download PerformanceMonitor release zip
+  ansible.builtin.get_url:
+    url: "https://github.com/erikdarlingdata/PerformanceMonitor/archive/refs/tags/{{ perfmon_version }}.zip"
+    dest: "{{ _perfmon_zip }}"
+    mode: "0644"
+  when: not _perfmon_zip_preseeded.stat.exists
+  delegate_to: localhost
+  run_once: true
+
+- name: Extract release zip
+  ansible.builtin.unarchive:
+    src: "{{ _perfmon_zip }}"
+    dest: "{{ perfmon_tmp_dir }}"
+    remote_src: false
+  delegate_to: localhost
+  run_once: true
+
+- name: Set install and upgrade script directory facts
+  ansible.builtin.set_fact:
+    _perfmon_install_dir: "{{ perfmon_tmp_dir }}/PerformanceMonitor-{{ _perfmon_version_clean }}/install"
+    _perfmon_upgrades_dir: "{{ perfmon_tmp_dir }}/PerformanceMonitor-{{ _perfmon_version_clean }}/upgrades"
+  delegate_to: localhost
+  run_once: true
+
+- name: Run upgrade scripts
+  ansible.builtin.import_tasks: upgrade_scripts.yml
+  when: perfmon_state == 'present'
+
+- name: Run install scripts
+  ansible.builtin.import_tasks: install_scripts.yml
+  when: perfmon_state == 'present' and (not (_at_target_version | default(false) | bool) or perfmon_force_reinstall | bool)
+
+- name: Apply local patches
+  ansible.builtin.import_tasks: apply_local_patches.yml
+  when: perfmon_state == 'present' and perfmon_local_patches_dir | length > 0
+
+- name: Install community tools
+  ansible.builtin.import_tasks: community_tools.yml
+  when: perfmon_state == 'present'
+
+- name: Manage grafana_reader login, roles, and permissions
+  ansible.builtin.import_tasks: reader_login.yml
+
+- name: Uninstall PerformanceMonitor
+  ansible.builtin.command:
+    argv:
+      - "{{ sqlcmd_bin }}"
+      - -S
+      - "{{ _mssql_server }}"
+      - -U
+      - "{{ mssql_sa_user }}"
+      - -P
+      - "{{ mssql_sa_password }}"
+      - -d
+      - master
+      - -C
+      - -b
+      - -i
+      - "{{ _perfmon_install_dir }}/00_uninstall.sql"
+  delegate_to: localhost
+  changed_when: true
+  no_log: true
+  when: perfmon_state == 'absent'
