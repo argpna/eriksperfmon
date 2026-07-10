@@ -1,0 +1,106 @@
+---
+# Apply local patches to fix upstream PerformanceMonitor issues.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/performance_monitor_patches.yml
+#   ansible-playbook -i ansible/inventory ansible/playbooks/performance_monitor_patches.yml --limit sql2022-a
+
+- name: Apply PerformanceMonitor patches
+  hosts: sql_servers
+  gather_facts: false
+
+  pre_tasks:
+    - name: Set sqlcmd default binary name  # noqa: run-once[task]
+      ansible.builtin.set_fact:
+        _sqlcmd: "{{ sqlcmd_bin | default('sqlcmd') }}"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Check sqlcmd in PATH  # noqa: run-once[task]
+      ansible.builtin.command:
+        argv:
+          - which
+          - "{{ _sqlcmd }}"
+      register: _sqlcmd_which
+      delegate_to: localhost
+      run_once: true
+      failed_when: false
+      changed_when: false
+
+    - name: Find sqlcmd at common install paths  # noqa: run-once[task]
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /opt/mssql-tools18/bin/sqlcmd
+        - /opt/mssql-tools/bin/sqlcmd
+      register: _sqlcmd_stat
+      delegate_to: localhost
+      run_once: true
+      when: _sqlcmd_which.rc != 0
+
+    - name: Auto-set sqlcmd binary from discovered path  # noqa: run-once[task]
+      ansible.builtin.set_fact:
+        _sqlcmd: "{{ (_sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | first).stat.path }}"
+      delegate_to: localhost
+      run_once: true
+      when:
+        - _sqlcmd_which.rc != 0
+        - _sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
+
+    - name: Fail with install instructions if sqlcmd not found  # noqa: run-once[task]
+      ansible.builtin.fail:
+        msg: |
+          sqlcmd not found on the Ansible control node. Install Microsoft ODBC tools:
+            RHEL/Fedora:   sudo dnf install -y mssql-tools18 unixODBC-devel
+            Ubuntu/Debian: https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
+          After installing, either add /opt/mssql-tools18/bin to your PATH or set
+          sqlcmd_bin=/opt/mssql-tools18/bin/sqlcmd in your inventory/group_vars.
+      delegate_to: localhost
+      run_once: true
+      when:
+        - _sqlcmd_which.rc != 0
+        - _sqlcmd_stat.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0
+
+  tasks:
+    - name: Gather patch files  # noqa: run-once[task]
+      ansible.builtin.find:
+        paths: "{{ perfmon_patches_dir | default(playbook_dir ~ '/../../patches') }}"
+        patterns: "*.sql"
+        file_type: file
+      register: _patch_find
+      delegate_to: localhost
+      run_once: true
+
+    - name: Set derived connection fact
+      ansible.builtin.set_fact:
+        _mssql_server: >-
+          {{
+            ansible_host
+            + ('\\' + mssql_instance if mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
+            + (',' + mssql_port | string if mssql_port is defined else '')
+          }}
+      delegate_to: localhost
+
+    - name: Apply patches
+      ansible.builtin.command:
+        argv:
+          - "{{ _sqlcmd }}"
+          - -S
+          - "{{ _mssql_server }}"
+          - -U
+          - "{{ mssql_sa_user }}"
+          - -P
+          - "{{ mssql_sa_password }}"
+          - -d
+          - master
+          - -C
+          - -b
+          - -i
+          - "{{ item }}"
+      loop: "{{ _patch_find.files | map(attribute='path') | sort | list }}"
+      loop_control:
+        label: "{{ item | basename }}"
+      delegate_to: localhost
+      changed_when: true
+      no_log: true
+      when: _patch_find.files | length > 0
