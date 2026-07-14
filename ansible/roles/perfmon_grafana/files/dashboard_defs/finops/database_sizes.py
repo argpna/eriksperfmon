@@ -42,7 +42,7 @@ SELECT
         CASE
             WHEN p.monthly_cost > 0
             THEN CONVERT(decimal(12,2),
-                dss.total_size_mb / SUM(dss.total_size_mb) OVER () * p.monthly_cost)
+                dss.total_size_mb / NULLIF(SUM(dss.total_size_mb) OVER (), 0) * p.monthly_cost)
             ELSE NULL
         END
 FROM collect.database_size_stats AS dss

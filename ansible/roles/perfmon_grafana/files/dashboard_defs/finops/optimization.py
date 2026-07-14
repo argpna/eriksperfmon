@@ -262,7 +262,7 @@ SELECT
         CASE
             WHEN wb.window_budget > 0
             THEN CONVERT(decimal(12,2),
-                tq.total_cpu_ms * 1.0 / SUM(tq.total_cpu_ms) OVER () * wb.window_budget)
+                tq.total_cpu_ms * 1.0 / NULLIF(SUM(tq.total_cpu_ms) OVER (), 0) * wb.window_budget)
             ELSE NULL
         END
 FROM top_queries AS tq

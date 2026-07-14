@@ -619,7 +619,7 @@ WITH
         WHERE c.sample_count >= 24
         AND   c.avg_cpu > 20
         AND   c.stddev_cpu > 0
-        AND   c.stddev_cpu / c.avg_cpu < 0.3
+        AND   c.stddev_cpu / NULLIF(c.avg_cpu, 0) < 0.3
     )
 SELECT category, severity, confidence, finding, detail, est_monthly_savings
 FROM findings
