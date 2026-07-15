@@ -23,7 +23,8 @@ Provisions Grafana datasources, dashboards, and alert rules for PerformanceMonit
 
 - `grafana_api_key`: a Grafana service account token with Admin role. Create the service account
   in the Grafana UI (Administration -> Service accounts) and supply the token via vault.
-- `mssql_reader_password`: password for the `grafana_reader` SQL login. Supply via vault.
+- `perfmon_reader_password`: password for the reader SQL login (`perfmon_reader_login_name`).
+  Supply via vault.
 - Grafana must have Unified Alerting enabled. Add `GF_UNIFIED_ALERTING_ENABLED=true` to Grafana's
   environment.
 - Ansible collection: `community.grafana`.
@@ -124,16 +125,16 @@ sql_servers:
 
 ### Required credentials
 
-`grafana_api_key` and `mssql_reader_password` have no role defaults and must be supplied. The recommended way is Ansible Vault:
+`grafana_api_key` and `perfmon_reader_password` have no role defaults and must be supplied. The recommended way is Ansible Vault:
 
 ```yaml
 # group_vars/grafana.yml
 grafana_api_key: "{{ vault_grafana_api_key }}"
-mssql_reader_password: "{{ vault_mssql_reader_password }}"
+perfmon_reader_password: "{{ vault_perfmon_reader_password }}"
 ```
 
 Create the service account in the Grafana UI (Administration -> Service accounts) with Admin role.
-`mssql_reader_password` is the password for the `grafana_reader` SQL login created by `perfmon_install`.
+`perfmon_reader_password` is the password for the reader SQL login created by `perfmon_install`.
 
 ## Variables
 
@@ -145,11 +146,16 @@ Create the service account in the Grafana UI (Administration -> Service accounts
 | `grafana_api_key` | - | Required. Grafana service account token with Admin role. |
 | `grafana_folder` | `PerformanceMonitor` | Grafana folder title where dashboards are placed. |
 | `grafana_folder_uid` | `perfmon` | Grafana folder UID. Must be stable across runs. If upgrading from an older role version that auto-assigned the folder UID, set this to match the existing UID. |
-| `mssql_reader_password` | - | Required. Password for the `grafana_reader` login (created by `perfmon_install`). |
+| `perfmon_reader_password` | - | Required. Password for the reader login (created by `perfmon_install`). |
+| `perfmon_reader_login_name` | `grafana_reader` | Name of the SQL login `perfmon_install` created (same variable in that role - one inventory setting covers both). Set per-host in inventory when one instance's login differs. Ignored when the resolved auth mode is `windows`. |
 | `perfmon_ds_name_prefix` | `PerfMon` | Datasource name prefix. Results in `PerfMon-<hostname>`. |
 | `perfmon_ds_uid_prefix` | `perfmon-ds` | Datasource UID prefix. Results in `perfmon-ds-<hostname>`. |
 | `perfmon_instances` | derived from `sql_servers` group | Override with an explicit list when your inventory group is named differently or you are running without a `sql_servers` group. See below. |
 | `perfmon_fleet_static` | `false` | When true, regenerates the fleet dashboard with all inventory hostnames baked in as a single table sortable by severity score. When false, dynamic fleet is used, which auto-discovers datasources matching `/^PerfMon-/` but cannot sort across instances. |
+| `perfmon_reader_auth_mode` | `sql` | Datasource authentication mode: `sql` or `windows` (Kerberos AD). Same variable `perfmon_install` uses - one inventory setting covers both roles. Set fleet-wide in `group_vars` or per-host for a mixed fleet. |
+| `perfmon_reader_windows_upn` | - | Required when the resolved auth mode is `windows`. AD principal in UPN form (`user@REALM`) for the datasource login - see Windows/AD authentication. |
+| `perfmon_reader_windows_password` | - | Required when the resolved auth mode is `windows`. The AD principal's domain password. Supply via vault. |
+| `grafana_krb5_conf_path` | `/etc/krb5.conf` | Path *on the Grafana host* to a Kerberos client config pointing at the domain's KDC. Only used when the resolved auth mode is `windows`. This role does not author or manage `krb5.conf`. |
 
 ### Alert threshold variables
 
@@ -214,6 +220,38 @@ perfmon_instances:
 
 Use `ds_host` / `ds_port` on an entry when the address Grafana uses to reach SQL Server differs
 from `ansible_host` / `mssql_port`.
+
+Per-instance auth settings (`perfmon_reader_auth_mode`, `perfmon_reader_login_name`,
+`perfmon_reader_windows_upn`, `perfmon_reader_windows_password`) are ordinary keys on an entry,
+so inventory host_vars carry through automatically; an entry-level value wins over the
+fleet-wide variable for that instance. See Windows/AD authentication below.
+
+## Windows/AD authentication
+
+Datasources can authenticate to SQL Server as a Kerberos AD principal instead of a SQL login. Set
+`perfmon_reader_auth_mode: windows` fleet-wide (group_vars) or per-host in inventory for a mixed
+fleet - the same place `perfmon_install` reads it. With an explicit `perfmon_instances` list the
+keys go directly on the entry:
+
+```yaml
+perfmon_instances:
+  - inventory_hostname: pubs-dev01
+    ansible_host: pubs-dev01.example.com
+    mssql_port: 1433
+    perfmon_reader_auth_mode: windows
+    perfmon_reader_windows_upn: svc_grafana_reader@LAB.INTERNAL
+    perfmon_reader_windows_password: "{{ vault_reader_windows_password }}"
+```
+
+`perfmon_reader_windows_upn` is the UPN form (`user@REALM`) - Grafana's Kerberos username field requires
+this format, which is a different string than the down-level `DOMAIN\principal` form
+`perfmon_install` uses for `CREATE LOGIN ... FROM WINDOWS`, even though both name the same AD
+principal.
+
+This requires a valid `krb5.conf` on the Grafana host (path set via `grafana_krb5_conf_path`,
+authored outside this role) pointing at the domain's KDC, and a domain-joined SQL Server
+instance. `perfmon_reader_windows_password` is the AD principal's domain password; like
+`perfmon_reader_password` it lands in Grafana's `secureJsonData`, encrypted at rest.
 
 ## Alerting
 

@@ -2,11 +2,20 @@
 - name: Validate required credentials are set
   ansible.builtin.assert:
     that:
-      - mssql_sa_password | default('') | length > 0
-      - perfmon_state != 'present' or mssql_reader_password | default('') | length > 0
+      - perfmon_admin_auth_mode in ['sql', 'windows']
+      - perfmon_admin_auth_mode != 'sql' or perfmon_admin_sql_password | default('') | length > 0
+      - perfmon_admin_auth_mode != 'windows' or (
+          perfmon_admin_windows_upn | default('') | length > 0
+          and perfmon_admin_windows_password | default('') | length > 0)
+      - perfmon_state != 'present' or perfmon_reader_auth_mode == 'windows'
+        or perfmon_reader_password | default('') | length > 0
+      - perfmon_state != 'present' or perfmon_reader_auth_mode != 'windows'
+        or perfmon_reader_windows_principal | default('') | length > 0
     fail_msg: >-
-      mssql_sa_password{{ ' and mssql_reader_password' if perfmon_state == 'present' else '' }}
-      must be set to a non-empty value. See README.md 'Required credentials'.
+      Missing credentials for the selected auth modes: sql admin mode needs perfmon_admin_sql_password,
+      windows admin mode needs perfmon_admin_windows_upn and perfmon_admin_windows_password,
+      sql reader mode needs perfmon_reader_password, windows reader mode needs
+      perfmon_reader_windows_principal. See README.md 'Required credentials'.
     quiet: true
   no_log: true
 
@@ -67,6 +76,31 @@
       }}
   delegate_to: localhost
   run_once: false
+
+# every sqlcmd task passes credentials via this environment instead of -U/-P argv:
+# sql mode uses sqlcmd's SQLCMDUSER/SQLCMDPASSWORD variables, windows mode leaves them
+# unset (sqlcmd then defaults to integrated auth) and points KRB5CCNAME at a per-host
+# ticket cache filled by the kinit task below.
+- name: Set sqlcmd auth environment
+  ansible.builtin.set_fact:
+    _sqlcmd_auth_env: >-
+      {{ {'KRB5CCNAME': '/tmp/krb5cc_perfmon_' + inventory_hostname}
+         if perfmon_admin_auth_mode == 'windows'
+         else {'SQLCMDUSER': perfmon_admin_sql_user, 'SQLCMDPASSWORD': perfmon_admin_sql_password} }}
+  no_log: true
+
+- name: Obtain kerberos ticket for the admin connection
+  ansible.builtin.command:
+    argv:
+      - kinit
+      - -c
+      - "/tmp/krb5cc_perfmon_{{ inventory_hostname }}"
+      - "{{ perfmon_admin_windows_upn }}"
+    stdin: "{{ perfmon_admin_windows_password }}"
+  delegate_to: localhost
+  changed_when: false
+  no_log: true
+  when: perfmon_admin_auth_mode == 'windows'
 
 - name: Create staging directory
   ansible.builtin.file:
@@ -141,16 +175,13 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - master
       - -C
       - -b
       - -i
       - "{{ _perfmon_install_dir }}/00_uninstall.sql"
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true

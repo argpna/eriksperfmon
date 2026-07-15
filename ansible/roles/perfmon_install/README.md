@@ -1,8 +1,7 @@
 # perfmon_install
 
 Installs [Erik Darling's PerformanceMonitor](https://github.com/erikdarlingdata/PerformanceMonitor)
-on one or more SQL Server instances. All work runs on the Ansible control node via `sqlcmd` over
-TCP; SSH/WinRM-ing onto the database host is not required.
+on one or more SQL Server instances. All work runs on the Ansible control node via `sqlcmd`.
 
 ## What it does
 
@@ -16,7 +15,8 @@ TCP; SSH/WinRM-ing onto the database host is not required.
    if the database is already at `perfmon_version` unless `perfmon_force_reinstall: true`.
 4. Applies any local patches from `perfmon_local_patches_dir`.
 5. Installs community tools: `sp_WhoIsActive`, `DarlingData` suite, `FirstResponderKit`.
-6. Creates the `grafana_reader` SQL login and makes it a member of `grafana_reader_role` - a
+6. Creates the reader SQL login (`perfmon_reader_login_name`, `grafana_reader` by default) and
+   makes it a member of `grafana_reader_role` - a
    dedicated server role with `VIEW SERVER STATE` for alert queries that read live DMVs, and
    `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` (granted as a pair) so the FinOps compression
    scan can read `sys.tables`/`sys.indexes` across every database, each toggleable and on by
@@ -48,12 +48,18 @@ instructions if it cannot be found.
 | `perfmon_force_reinstall` | `false` | Set to `true` to re-run all install scripts even when `installation_history` shows the instance is already at the target version. |
 | `mssql_port` | _(unset)_ | TCP port. When set, always used in the connection string: `host,port` or `host\instance,port`. Omit only for named instances where SQL Browser is the only option. |
 | `mssql_instance` | `MSSQLSERVER` | Instance name. `MSSQLSERVER` for the default instance, or a named instance. Named instances without a port fall back to `host\instance` (SQL Browser). |
-| `mssql_sa_user` | `sa` | Sysadmin equivalent login used during install. |
-| `mssql_sa_password` | - | Required. Supply via vault. |
-| `mssql_reader_password` | - | Required. Password for the `grafana_reader` login created by this role. Supply via vault. |
+| `perfmon_admin_sql_user` | `sa` | Sysadmin equivalent login used during install when `perfmon_admin_auth_mode` is `sql`. |
+| `perfmon_admin_sql_password` | - | Required when `perfmon_admin_auth_mode` is `sql`. Supply via vault. |
+| `perfmon_admin_auth_mode` | `sql` | Auth mode for the role's own admin connection. `sql` connects as `perfmon_admin_sql_user`/`perfmon_admin_sql_password`; `windows` runs `kinit` as `perfmon_admin_windows_upn` and connects with kerberos integrated auth - see Windows Authentication below. |
+| `perfmon_admin_windows_upn` | - | Required when `perfmon_admin_auth_mode` is `windows`. UPN form, e.g. `sqladmin@LAB.INTERNAL`. Must already hold sysadmin on the instance. |
+| `perfmon_admin_windows_password` | - | Required when `perfmon_admin_auth_mode` is `windows`. Supply via vault. |
+| `perfmon_reader_password` | - | Required when `perfmon_reader_auth_mode` is `sql`. Password for the reader login. Supply via vault. |
+| `perfmon_reader_login_name` | `grafana_reader` | Name of the SQL login created when `perfmon_reader_auth_mode` is `sql`. Change this if `grafana_reader` collides with an existing principal or your naming convention differs. Ignored when `perfmon_reader_auth_mode` is `windows` - see `perfmon_reader_windows_principal` below. |
 | `perfmon_reader_grant_view_server_state` | `true` | Grant `VIEW SERVER STATE` to `grafana_reader_role`. Required for DMV-backed alerts and dashboards (blocking, long-running queries). Set to `false` to revoke it and run with a narrower reader login. |
-| `perfmon_reader_grant_cross_db_metadata` | `true` | Grant `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` to `grafana_reader_role` (paired - `CONNECT ANY DATABASE` alone still hides catalog-view rows in databases `grafana_reader` isn't a member of). Required for the FinOps compression scan, which reads `sys.tables`/`sys.indexes` across every database. Set to `false` to revoke both and run with a narrower reader login. |
-| `perfmon_reader_grant_msdb_access` | `true` | Add `grafana_reader` to `msdb`'s built-in `SQLAgentReaderRole`, needed for the Running Jobs collector and Failed Collector Job alert. Set to `false` to drop the role membership and keep `grafana_reader` out of `msdb`. |
+| `perfmon_reader_grant_cross_db_metadata` | `true` | Grant `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` to `grafana_reader_role` (paired - `CONNECT ANY DATABASE` alone still hides catalog-view rows in databases the reader login isn't a member of). Required for the FinOps compression scan, which reads `sys.tables`/`sys.indexes` across every database. Set to `false` to revoke both and run with a narrower reader login. |
+| `perfmon_reader_grant_msdb_access` | `true` | Add the reader login to `msdb`'s built-in `SQLAgentReaderRole`, needed for the Running Jobs collector and Failed Collector Job alert. Set to `false` to drop the role membership and keep it out of `msdb`. |
+| `perfmon_reader_auth_mode` | `sql` | `sql` creates a SQL login (`perfmon_reader_login_name`) with `perfmon_reader_password`. `windows` creates an AD login/group via `CREATE LOGIN ... FROM WINDOWS` instead - see Windows Authentication below. |
+| `perfmon_reader_windows_principal` | - | Required when `perfmon_reader_auth_mode` is `windows`. Down-level form, e.g. `LAB\svc_grafana_reader` (an individual account) or `LAB\SQLReaders` (a group - lets an AD team add/remove readers with no Ansible re-run). Used as the login name directly - an AD account can't be renamed to match `perfmon_reader_login_name`. |
 | `perfmon_db` | `PerformanceMonitor` | Database name. |
 | `sqlcmd_bin` | `sqlcmd` | Path to sqlcmd if not on PATH. |
 | `perfmon_tmp_dir` | `/tmp/perfmon-install` | Staging directory on the control node for the downloaded release zip and community tool files. Download/extract tasks run once per play, not once per host, so this must resolve to the same path for every host in a play. |
@@ -63,18 +69,36 @@ instructions if it cannot be found.
 
 ## Required credentials
 
-`mssql_sa_password` and `mssql_reader_password` have no role defaults and must be supplied.
-The recommended way is Ansible Vault:
+`perfmon_admin_sql_password` is required when `perfmon_admin_auth_mode` is `sql` (the default);
+`perfmon_admin_windows_upn` and `perfmon_admin_windows_password` are required when it's
+`windows` instead. `perfmon_reader_password` is required when `perfmon_reader_auth_mode` is
+`sql` (the default); `perfmon_reader_windows_principal` is required when it's `windows`
+instead. The recommended way is Ansible Vault:
 
 ```yaml
 # group_vars/sql_servers.yml
-mssql_sa_password: "{{ vault_mssql_sa_password }}"
-mssql_reader_password: "{{ vault_mssql_reader_password }}"
+perfmon_admin_sql_password: "{{ vault_perfmon_admin_sql_password }}"
+perfmon_reader_password: "{{ vault_perfmon_reader_password }}"
 ```
 
 ## Windows Authentication
 
-Not currently supported. The role uses SQL Server auth (`-U`/`-P`) only.
+Two independent connections can each use AD/kerberos auth:
+
+**Reader login** (`perfmon_reader_auth_mode: windows`): the reader login is created as an
+Active Directory principal instead of a SQL login - set `perfmon_reader_windows_principal` (a
+down-level `DOMAIN\principal` or `DOMAIN\group` name). The role only issues `CREATE LOGIN ...
+FROM WINDOWS` and role memberships; the instance must already accept AD auth.
+
+**Admin connection** (`perfmon_admin_auth_mode: windows`): the role's own install/admin
+`sqlcmd` connections authenticate via kerberos instead of sql-auth. The role runs `kinit` as
+`perfmon_admin_windows_upn` into a per-host ticket cache and `sqlcmd` connects with integrated
+auth. Control-node requirements: `kinit` (krb5 client tools), an `/etc/krb5.conf` pointing at
+the domain's KDC (with `rdns = false` if reverse DNS doesn't resolve cleanly), `ansible_host`
+set to the FQDN matching the instance's `MSSQLSvc` SPN, and the principal already granted
+sysadmin. The control node does **not** need to be domain-joined - a reachable KDC and valid
+credentials are enough. Note kerberos requires `mssql_port` to be present in the SPN, so keep
+`mssql_port` set.
 
 ## Air-gapped installs
 
@@ -85,14 +109,15 @@ any downloads, including the core release zip.
 
 ## Upgrading
 
-1. Bump `perfmon_version` in `defaults/main.yml` (or in `group_vars` or pass
+1. Back up the `PerformanceMonitor` database before upgrading.
+2. Bump `perfmon_version` in `defaults/main.yml` (or in `group_vars` or pass
    `-e perfmon_version=vX.Y.Z`) and re-run the role.
-2. The role reads `config.installation_history` to detect the installed version, then runs only
+3. The role reads `config.installation_history` to detect the installed version, then runs only
    the upgrade directories that fall within the version gap (e.g. `3.0.0-to-3.1.0/` for a
    3.0.0 to 3.1.0 upgrade). Upgrade results are recorded in `installation_history`.
-3. Downgrade is rejected. The role fails if `perfmon_version` is older than the recorded
+4. Downgrade is rejected. The role fails if `perfmon_version` is older than the recorded
    installed version.
-4. Run `scripts/verify-panels.py <datasource-uid>` from the `eriksperfmon` repo against a live
+5. Run `scripts/verify-panels.py <datasource-uid>` from the `eriksperfmon` repo against a live
    Grafana datasource. Any panel query that references a renamed or dropped column will fail
    with a SQL error. Fix column references in the role's `files/dashboard_defs/` modules and regenerate.
 
@@ -122,8 +147,8 @@ Use the role directly in a playbook:
       vars:
         perfmon_version: v3.0.0
         mssql_port: 1433
-        mssql_sa_password: "{{ vault_sa_password }}"
-        mssql_reader_password: "{{ vault_reader_password }}"
+        perfmon_admin_sql_password: "{{ vault_sa_password }}"
+        perfmon_reader_password: "{{ vault_reader_password }}"
 ```
 
 Or run the included playbook directly:
@@ -135,7 +160,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_moni
 Install on a single host:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml --limit sql2022-a
+ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml --limit sql01
 ```
 
 Uninstall from all hosts:

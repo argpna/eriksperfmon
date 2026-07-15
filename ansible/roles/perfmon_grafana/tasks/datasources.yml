@@ -17,13 +17,15 @@
            + ('\\' + _h.mssql_instance if _h.mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
            + (':' + (_h.ds_port | default(_h.mssql_port)) | string if _h.ds_port is defined or _h.mssql_port is defined else '') }}
       database: PerformanceMonitor
-      user: grafana_reader
+      user: "{{ _reader_user }}"
       secureJsonData:
-        password: "{{ mssql_reader_password }}"
+        password: "{{ _reader_password }}"
       jsonData:
         tlsSkipVerify: true
         encrypt: "{{ _h.ds_encrypt | default('true') }}"
         queryTimeout: "60"
+        authenticationType: "{{ 'Windows AD: Username + password' if _reader_windows else 'SQL Server Authentication' }}"
+        configFilePath: "{{ (_h.grafana_krb5_conf_path | default(grafana_krb5_conf_path)) if _reader_windows else omit }}"
       access: proxy
     status_code: [200, 404]
   loop: "{{ perfmon_instances }}"
@@ -31,6 +33,13 @@
     label: "{{ item.inventory_hostname }}"
   vars:
     _h: "{{ item }}"
+    _reader_windows: "{{ (_h.perfmon_reader_auth_mode | default(perfmon_reader_auth_mode)) == 'windows' }}"
+    _reader_user: >-
+      {{ (_h.perfmon_reader_windows_upn | default(perfmon_reader_windows_upn)) if _reader_windows
+         else (_h.perfmon_reader_login_name | default(perfmon_reader_login_name)) }}
+    _reader_password: >-
+      {{ (_h.perfmon_reader_windows_password | default(perfmon_reader_windows_password)) if _reader_windows
+         else perfmon_reader_password }}
   register: _ds_put
   delegate_to: localhost
   no_log: true
@@ -51,13 +60,15 @@
            + ('\\' + _h.mssql_instance if _h.mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
            + (':' + (_h.ds_port | default(_h.mssql_port)) | string if _h.ds_port is defined or _h.mssql_port is defined else '') }}
       database: PerformanceMonitor
-      user: grafana_reader
+      user: "{{ _reader_user }}"
       secureJsonData:
-        password: "{{ mssql_reader_password }}"
+        password: "{{ _reader_password }}"
       jsonData:
         tlsSkipVerify: true
         encrypt: "{{ _h.ds_encrypt | default('true') }}"
         queryTimeout: "120"
+        authenticationType: "{{ 'Windows AD: Username + password' if _reader_windows else 'SQL Server Authentication' }}"
+        configFilePath: "{{ (_h.grafana_krb5_conf_path | default(grafana_krb5_conf_path)) if _reader_windows else omit }}"
       access: proxy
     status_code: [200, 201]
   loop: "{{ _ds_put.results | selectattr('status', 'equalto', 404) | list }}"
@@ -65,6 +76,13 @@
     label: "{{ item.item.inventory_hostname }}"
   vars:
     _h: "{{ item.item }}"
+    _reader_windows: "{{ (_h.perfmon_reader_auth_mode | default(perfmon_reader_auth_mode)) == 'windows' }}"
+    _reader_user: >-
+      {{ (_h.perfmon_reader_windows_upn | default(perfmon_reader_windows_upn)) if _reader_windows
+         else (_h.perfmon_reader_login_name | default(perfmon_reader_login_name)) }}
+    _reader_password: >-
+      {{ (_h.perfmon_reader_windows_password | default(perfmon_reader_windows_password)) if _reader_windows
+         else perfmon_reader_password }}
   delegate_to: localhost
   no_log: true
 

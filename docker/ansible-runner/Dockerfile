@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
     python3 python3-pip curl gnupg2 apt-transport-https ca-certificates unzip \
+    krb5-user \
     && rm -rf /var/lib/apt/lists/*
 
 # sqlcmd from microsoft packages

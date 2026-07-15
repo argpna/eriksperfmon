@@ -1,6 +1,4 @@
 ---
-# Fine here, but use ansible vault in your env
-mssql_reader_password: "{{ lookup('env', 'GRAFANA_READER_PASSWORD') }}"
 grafana_api_key: "{{ lookup('env', 'GRAFANA_API_KEY') | default('') }}"
 
 perfmon_alert_receiver_name: perfmon-alerts

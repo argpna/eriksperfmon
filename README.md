@@ -1,10 +1,10 @@
 # Grafana dashboards for Erik Darling's PerformanceMonitor
 
 Grafana front-end for [erikdarlingdata/PerformanceMonitor](https://github.com/erikdarlingdata/PerformanceMonitor)
-(Full Edition), plus a cross-platform installer.
+(Full Edition), plus a cross-platform installer/deployer that can scale regardless of the fleet size.
 
 The dashboards read the same `collect.*` tables and `report.*` views as Erik's C# app. Grafana
-requires a SQL authenticated login with read access to the PerformanceMonitor database.
+requires a login with read access to the PerformanceMonitor database.
 
 Screenshots of all dashboards can be viewed at: [argpna.github.io/eriksperfmon-demo](https://argpna.github.io/eriksperfmon-demo/)
 
@@ -75,7 +75,7 @@ dashboard with your instance list baked in.
 - PerformanceMonitor Full Edition installed on each SQL Server. The SQL Agent job must be enabled
   and running. Data is collected every minute.
 - Grafana 10 or later.
-- A SQL authenticated login for Grafana on each instance with `SELECT` on the PerformanceMonitor
+- A SQL/Windows authenticated login for Grafana on each instance with `SELECT` on the PerformanceMonitor
   schemas, and optionally `VIEW SERVER STATE`, `CONNECT ANY DATABASE`, `VIEW ANY DEFINITION`, and
   `SQLAgentReaderRole` in `msdb` for additional dashboard/alert coverage.
 
@@ -87,31 +87,32 @@ and `msdb`. Replace `GrafanaReaderPass` with a password of your choice.
 (See [Complete solution](#complete-solution) section for automation options)
 
 ```sql
--- sql auth login and server role
+/* sql auth login and server role. grafana mssql datasource also accepts win-auth,
+but require setting up krb5.conf */
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader')
     CREATE LOGIN grafana_reader
-        WITH PASSWORD = N'GrafanaReaderPass', CHECK_POLICY = OFF;
+        WITH PASSWORD = N'GrafanaReaderPass', CHECK_POLICY = ON;
 
--- role based access - server role
+/* role based access - server role */
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader_role' AND type = 'R')
     CREATE SERVER ROLE grafana_reader_role;
 
--- for reading sys.dm_exec_requests, sys.dm_os_ring_buffers etc
+/* for reading sys.dm_exec_requests, sys.dm_os_ring_buffers etc */
 GRANT VIEW SERVER STATE TO grafana_reader_role;
 
--- for reading sys.tables, sys.indexes etc
+/* for reading sys.tables, sys.indexes etc */
 GRANT CONNECT ANY DATABASE TO grafana_reader_role;
 GRANT VIEW ANY DEFINITION TO grafana_reader_role;
 
 ALTER SERVER ROLE grafana_reader_role ADD MEMBER grafana_reader;
 
--- database user, database role, and schema permissions
+/* database user, database role, and schema permissions */
 USE [PerformanceMonitor];
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
     CREATE USER grafana_reader FOR LOGIN grafana_reader;
 
--- role based access - database role
+/* role based access - database role */
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader_role' AND type = 'R')
     CREATE ROLE grafana_reader_role AUTHORIZATION dbo;
 
@@ -121,7 +122,7 @@ GRANT SELECT ON SCHEMA::config  TO grafana_reader_role;
 
 ALTER ROLE grafana_reader_role ADD MEMBER grafana_reader;
 
--- to alert on collection job failures
+/* to alert on collection job failures */
 USE [msdb];
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
@@ -145,9 +146,9 @@ Add one **Microsoft SQL Server** datasource in Grafana for each SQL Server insta
 | Host | `hostname:port#` |
 | Database | `PerformanceMonitor` |
 | TLS/SSL mode | match your SQL Server configuration |
-| Authentication | SQL Server Authentication |
-| User | `grafana_reader` |
-| Password | the password you set in Step 1 |
+| Authentication | `SQL Server Authentication` (default), or `Windows AD: Username + password` for the AD login alternative above - requires a `krb5.conf` on the Grafana host pointing at the domain's KDC |
+| User | `grafana_reader` (SQL auth), or the AD principal's UPN for Kerberos, e.g. `svc_grafana_reader@LAB.INTERNAL` - note this is the UPN form, a different string than the down-level name used in Step 1's `CREATE LOGIN` |
+| Password | the password you set in Step 1 (SQL auth), or the AD principal's domain password (Kerberos) |
 | Min time interval | `1m` |
 
 Save and **Test** each datasource before importing dashboards. A red error at this stage is almost
@@ -297,8 +298,8 @@ The roles target the `sql_servers` group; any host reachable through it (directl
 
 Set credentials in
 [ansible/inventory/group_vars/sql_servers.yml](ansible/inventory/group_vars/sql_servers.yml)
-or an Ansible Vault file. The required variables are `mssql_sa_password` and
-`mssql_reader_password`.
+or an Ansible Vault file. The required variables are `perfmon_admin_sql_password` and
+`perfmon_reader_password`.
 
 ### Step 2: Deploy
 
@@ -338,7 +339,7 @@ lightweight sqlcmd scripts. The ansible-runner exits after the playbook complete
 
 ```bash
 cp .env.example .env
-# Edit .env to set MSSQL_SA_PASSWORD, GRAFANA_READER_PASSWORD, GRAFANA_ADMIN_PASSWORD
+# Edit .env to set MSSQL_SA_PASSWORD, MSSQL_READER_PASSWORD, GRAFANA_ADMIN_PASSWORD
 docker compose up -d
 ```
 

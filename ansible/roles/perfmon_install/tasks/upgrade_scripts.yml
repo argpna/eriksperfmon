@@ -8,10 +8,6 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -C
       - -h
       - "-1"
@@ -19,6 +15,7 @@
       - -Q
       - "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = N'{{ perfmon_db }}';"
   register: _perfmon_db_check
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: false
   no_log: true
@@ -33,10 +30,6 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - "{{ perfmon_db }}"
       - -C
@@ -51,6 +44,7 @@
         WHERE installation_status = N'SUCCESS'
         ORDER BY installation_date DESC;
   register: _installed_version_raw
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: false
   failed_when: false
@@ -150,10 +144,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - master
           - -C
@@ -163,6 +153,7 @@
       loop: "{{ _upgrade_scripts }}"
       loop_control:
         label: "{{ item | basename }}"
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true
@@ -173,10 +164,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - "{{ perfmon_db }}"
           - -C
@@ -192,6 +179,7 @@
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
                  N'UPGRADE', N'{{ _installed_version_clean }}', N'SUCCESS',
                  {{ _upgrade_scripts | length }}, 0);
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true
@@ -225,10 +213,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - "{{ perfmon_db }}"
           - -C
@@ -245,6 +229,7 @@
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
                  N'UPGRADE', N'{{ _installed_version_clean }}', N'FAILED',
                  0, 1, N'{{ _upgrade_failure_note }}');
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       failed_when: false

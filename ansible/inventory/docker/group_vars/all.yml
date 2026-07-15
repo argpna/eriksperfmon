@@ -1,0 +1,2 @@
+---
+perfmon_reader_password: "{{ lookup('env', 'MSSQL_READER_PASSWORD') }}"

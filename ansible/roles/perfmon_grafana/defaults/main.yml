@@ -7,6 +7,24 @@ grafana_folder_uid: perfmon
 perfmon_ds_name_prefix: PerfMon
 perfmon_ds_uid_prefix: perfmon-ds
 
+# datasource auth mode: sql or windows. Set fleet-wide here or in group_vars or
+# per-host in inventory for a mixed fleet. A host-level value wins for that
+# instance's datasource.
+perfmon_reader_auth_mode: sql
+
+# Ignored when the resolved auth mode is "windows" - perfmon_reader_windows_upn
+# is used instead.
+perfmon_reader_login_name: grafana_reader
+
+# AD credentials for the datasource when the resolved auth mode is "windows". The
+# UPN form user@REALM is required by Grafana's kerberos username field.
+# perfmon_reader_windows_upn: set in inventory group_vars or vault
+# perfmon_reader_windows_password: set in inventory group_vars or vault
+
+# path on the Grafana host to a Kerberos client config (krb5.conf) pointing at the
+# domain's KDC. Only used when the resolved auth mode is windows.
+grafana_krb5_conf_path: /etc/krb5.conf
+
 # Auto-discovered from the sql_servers inventory group. override with an explicit list
 perfmon_instances: "{{ groups['sql_servers'] | default([]) | map('extract', hostvars) | list }}"
 

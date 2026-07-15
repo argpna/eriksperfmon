@@ -1,6 +1,15 @@
 ---
-# Role-based grafana_reader access: every permission is granted to grafana_reader_role
-# the grafana_reader login/users are just members of the role.
+# Role-based reader access: every permission is granted to grafana_reader_role, the reader
+# login/users are just members of the role.
+#
+# perfmon_reader_auth_mode: sql (default) uses a SQL login named perfmon_reader_login_name.
+# perfmon_reader_auth_mode: windows uses an AD login/group (perfmon_reader_windows_principal) -
+# CREATE LOGIN ... FROM WINDOWS requires the instance to already be domain-joined with a
+# service keytab configured. Not automated by this role.
+
+- name: Compute reader login name
+  ansible.builtin.set_fact:
+    _reader_login_name: "{{ perfmon_reader_windows_principal if perfmon_reader_auth_mode == 'windows' else perfmon_reader_login_name }}"
 
 - name: Create grafana_reader server login and server role
   ansible.builtin.command:
@@ -8,18 +17,18 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - master
       - -C
       - -b
       - -Q
       - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader')
-            CREATE LOGIN grafana_reader WITH PASSWORD = N'{{ mssql_reader_password }}', CHECK_POLICY = OFF;
+        IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name }}')
+        {% if perfmon_reader_auth_mode == 'windows' %}
+            CREATE LOGIN [{{ _reader_login_name }}] FROM WINDOWS;
+        {% else %}
+            CREATE LOGIN [{{ _reader_login_name }}] WITH PASSWORD = N'{{ perfmon_reader_password }}', CHECK_POLICY = OFF;
+        {% endif %}
         IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader_role' AND type = 'R')
             CREATE SERVER ROLE grafana_reader_role;
         {% if perfmon_reader_grant_view_server_state %}
@@ -34,8 +43,9 @@
         REVOKE CONNECT ANY DATABASE FROM grafana_reader_role;
         REVOKE VIEW ANY DEFINITION FROM grafana_reader_role;
         {% endif %}
-        IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'grafana_reader') = 0
-            ALTER SERVER ROLE grafana_reader_role ADD MEMBER grafana_reader;
+        IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 0
+            ALTER SERVER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name }}];
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -47,25 +57,22 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - "{{ perfmon_db }}"
       - -C
       - -b
       - -Q
       - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
-            CREATE USER grafana_reader FOR LOGIN grafana_reader;
+        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
+            CREATE USER [{{ _reader_login_name }}] FOR LOGIN [{{ _reader_login_name }}];
         IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader_role' AND type = 'R')
             CREATE ROLE grafana_reader_role AUTHORIZATION dbo;
         GRANT SELECT ON SCHEMA::collect TO grafana_reader_role;
         GRANT SELECT ON SCHEMA::report  TO grafana_reader_role;
         GRANT SELECT ON SCHEMA::config  TO grafana_reader_role;
-        IF IS_ROLEMEMBER(N'grafana_reader_role', N'grafana_reader') = 0
-            ALTER ROLE grafana_reader_role ADD MEMBER grafana_reader;
+        IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 0
+            ALTER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name }}];
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -77,25 +84,22 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - msdb
       - -C
       - -b
       - -Q
       - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
-            CREATE USER grafana_reader FOR LOGIN grafana_reader;
+        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
+            CREATE USER [{{ _reader_login_name }}] FOR LOGIN [{{ _reader_login_name }}];
         {% if perfmon_reader_grant_msdb_access %}
-        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'grafana_reader') = 0
-            EXEC sp_addrolemember N'SQLAgentReaderRole', N'grafana_reader';
+        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name }}') = 0
+            EXEC sp_addrolemember N'SQLAgentReaderRole', N'{{ _reader_login_name }}';
         {% else %}
-        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'grafana_reader') = 1
-            EXEC sp_droprolemember N'SQLAgentReaderRole', N'grafana_reader';
+        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name }}') = 1
+            EXEC sp_droprolemember N'SQLAgentReaderRole', N'{{ _reader_login_name }}';
         {% endif %}
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -107,10 +111,6 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - master
       - -C
@@ -119,10 +119,11 @@
       - >-
         IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader_role' AND type = 'R')
         BEGIN
-            IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'grafana_reader') = 1
-                ALTER SERVER ROLE grafana_reader_role DROP MEMBER grafana_reader;
+            IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 1
+                ALTER SERVER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name }}];
             DROP SERVER ROLE grafana_reader_role;
         END
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -134,10 +135,6 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - "{{ perfmon_db }}"
       - -C
@@ -146,12 +143,13 @@
       - >-
         IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader_role' AND type = 'R')
         BEGIN
-            IF IS_ROLEMEMBER(N'grafana_reader_role', N'grafana_reader') = 1
-                ALTER ROLE grafana_reader_role DROP MEMBER grafana_reader;
+            IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 1
+                ALTER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name }}];
             DROP ROLE grafana_reader_role;
         END
-        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
-            DROP USER grafana_reader;
+        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
+            DROP USER [{{ _reader_login_name }}];
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -163,18 +161,15 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - msdb
       - -C
       - -b
       - -Q
       - >-
-        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader')
-            DROP USER grafana_reader;
+        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
+            DROP USER [{{ _reader_login_name }}];
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
@@ -186,25 +181,22 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - master
       - -C
       - -b
       - -Q
       - >-
-        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader')
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name }}')
         BEGIN
             DECLARE @kill nvarchar(max) = N'';
             SELECT @kill += N'KILL ' + CONVERT(nvarchar(12), session_id) + N';'
             FROM sys.dm_exec_sessions
-            WHERE login_name = N'grafana_reader';
+            WHERE login_name = N'{{ _reader_login_name }}';
             IF @kill <> N'' EXEC sys.sp_executesql @kill;
-            DROP LOGIN grafana_reader;
+            DROP LOGIN [{{ _reader_login_name }}];
         END
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   register: _drop_grafana_reader_login
   retries: 5

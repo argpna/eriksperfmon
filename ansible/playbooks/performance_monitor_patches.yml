@@ -61,6 +61,28 @@
         - _sqlcmd_which.rc != 0
         - _sqlcmd_stat.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0
 
+    # mirrors ansible/roles/perfmon_install/tasks/main.yml
+    - name: Set sqlcmd auth environment
+      ansible.builtin.set_fact:
+        _sqlcmd_auth_env: >-
+          {{ {'KRB5CCNAME': '/tmp/krb5cc_perfmon_' + inventory_hostname}
+             if perfmon_admin_auth_mode | default('sql') == 'windows'
+             else {'SQLCMDUSER': perfmon_admin_sql_user, 'SQLCMDPASSWORD': perfmon_admin_sql_password} }}
+      no_log: true
+
+    - name: Obtain kerberos ticket for the admin connection
+      ansible.builtin.command:
+        argv:
+          - kinit
+          - -c
+          - "/tmp/krb5cc_perfmon_{{ inventory_hostname }}"
+          - "{{ perfmon_admin_windows_upn }}"
+        stdin: "{{ perfmon_admin_windows_password }}"
+      delegate_to: localhost
+      changed_when: false
+      no_log: true
+      when: perfmon_admin_auth_mode | default('sql') == 'windows'
+
   tasks:
     - name: Gather patch files  # noqa: run-once[task]
       ansible.builtin.find:
@@ -87,10 +109,6 @@
           - "{{ _sqlcmd }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - master
           - -C
@@ -100,6 +118,7 @@
       loop: "{{ _patch_find.files | map(attribute='path') | sort | list }}"
       loop_control:
         label: "{{ item | basename }}"
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true

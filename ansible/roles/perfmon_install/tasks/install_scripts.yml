@@ -4,6 +4,10 @@
 # Install scripts are idempotent. Corresponding tasks report "changed" on every run;
 # that is expected.
 
+# potential footgun: with run_once the task executes on the play's first host only,
+# and if that host skips this whole file (already at target version) the fact is
+# never set for hosts that do need it - a mixed fleet then fails on the loop.
+# removing run_once from the two tasks below.
 - name: Gather install script list
   ansible.builtin.find:
     paths: "{{ _perfmon_install_dir }}"
@@ -11,7 +15,6 @@
     file_type: file
   register: _script_find
   delegate_to: localhost
-  run_once: true
 
 - name: Sort and filter scripts
   ansible.builtin.set_fact:
@@ -27,7 +30,6 @@
         | list
       }}
   delegate_to: localhost
-  run_once: true
 
 - name: Determine installation type for history record
   ansible.builtin.set_fact:
@@ -51,10 +53,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - master
           - -C
@@ -64,6 +62,7 @@
       loop: "{{ _install_scripts }}"
       loop_control:
         label: "{{ item | basename }}"
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true
@@ -74,10 +73,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - "{{ perfmon_db }}"
           - -C
@@ -94,6 +89,7 @@
                  N'{{ _install_type }}',
                  {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
                  N'SUCCESS', {{ _install_scripts | length }}, 0);
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true
@@ -128,10 +124,6 @@
           - "{{ sqlcmd_bin }}"
           - -S
           - "{{ _mssql_server }}"
-          - -U
-          - "{{ mssql_sa_user }}"
-          - -P
-          - "{{ mssql_sa_password }}"
           - -d
           - "{{ perfmon_db }}"
           - -C
@@ -149,6 +141,7 @@
                  N'{{ _install_type }}',
                  {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
                  N'FAILED', 0, 1, N'{{ _install_failure_note }}');
+      environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       failed_when: false

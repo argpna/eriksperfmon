@@ -54,10 +54,6 @@
       - "{{ sqlcmd_bin }}"
       - -S
       - "{{ _mssql_server }}"
-      - -U
-      - "{{ mssql_sa_user }}"
-      - -P
-      - "{{ mssql_sa_password }}"
       - -d
       - "{{ perfmon_db }}"
       - -C
@@ -67,6 +63,7 @@
   loop: "{{ perfmon_community_tools }}"
   loop_control:
     label: "{{ item.name }}"
+  environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
   no_log: true
