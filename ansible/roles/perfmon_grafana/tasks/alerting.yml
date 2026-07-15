@@ -71,6 +71,7 @@
   ansible.builtin.assert:
     that: item.name is match('^perfmon-')
     fail_msg: "Mute timing '{{ item.name }}' must use a 'perfmon-' prefix to be managed by this role"
+    quiet: true
   loop: "{{ perfmon_alert_mute_timings }}"
   loop_control:
     label: "{{ item.name }}"
@@ -159,6 +160,7 @@
     fail_msg: >-
       Rule group '{{ item[0] }}' has interval '{{ item[1][0].interval }}', which does not match
       the supported <number><unit> format, unit must be one of - s, m, h, d.
+    quiet: true
   loop: "{{ _perfmon_merged_groups }}"
   loop_control:
     label: "{{ item[0] }}"
