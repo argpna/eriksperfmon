@@ -7,3 +7,7 @@
 
 skip_list:
   - var-naming[no-role-prefix]
+
+# only generic yamllint rules should apply for docker-compose
+exclude_paths:
+  - docker-compose.yml

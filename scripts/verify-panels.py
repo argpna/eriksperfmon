@@ -27,6 +27,7 @@ import json
 import os
 import pathlib
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -46,6 +47,9 @@ if len(sys.argv) < 2:
 DS_UIDS = sys.argv[1:]
 
 REQUEST_TIMEOUT_SECONDS = 30
+
+RETRY_ATTEMPTS = 4
+RETRY_DELAY_SECONDS = 15
 
 NON_SQL_VARIABLE_TYPES = {"datasource"}
 
@@ -153,6 +157,15 @@ def run_query(ds_uid: str, sql: str, fmt: str):
     return ("OK", rows)
 
 
+def run_query_with_retry(ds_uid: str, sql: str, fmt: str):
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        status, detail = run_query(ds_uid, sql, fmt)
+        if status == "OK" or attempt == RETRY_ATTEMPTS:
+            return status, detail
+        time.sleep(RETRY_DELAY_SECONDS)
+    return status, detail
+
+
 def load_dashboard(path: pathlib.Path) -> dict | None:
     try:
         with open(path, encoding="utf-8") as fh:
@@ -196,7 +209,9 @@ def main() -> None:
                 sql = _apply_subs(sql, subs)
                 for ds_uid in DS_UIDS:
                     tested += 1
-                    status, detail = run_query(ds_uid, sql, t.get("format", "table"))
+                    status, detail = run_query_with_retry(
+                        ds_uid, sql, t.get("format", "table")
+                    )
                     flag = ""
                     if status == "ERROR":
                         failures += 1
