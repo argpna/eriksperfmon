@@ -31,6 +31,9 @@ perfmon_reader_login_name: grafana_reader
 
 perfmon_db: PerformanceMonitor
 
+# treat 98_validate_installation.sql problems as a warning instead of a failure.
+perfmon_skip_validation_failures: false
+
 # VIEW SERVER STATE is required for DMV-backed alerts and dashboards.
 perfmon_reader_grant_view_server_state: true
 

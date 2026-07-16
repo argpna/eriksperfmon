@@ -158,14 +158,6 @@
   ansible.builtin.import_tasks: install_scripts.yml
   when: perfmon_state == 'present' and (not (_at_target_version | default(false) | bool) or perfmon_force_reinstall | bool)
 
-- name: Apply local patches
-  ansible.builtin.import_tasks: apply_local_patches.yml
-  when: perfmon_state == 'present' and perfmon_local_patches_dir | length > 0
-
-- name: Install community tools
-  ansible.builtin.import_tasks: community_tools.yml
-  when: perfmon_state == 'present'
-
 - name: Manage grafana_reader login, roles, and permissions
   ansible.builtin.import_tasks: reader_login.yml
 

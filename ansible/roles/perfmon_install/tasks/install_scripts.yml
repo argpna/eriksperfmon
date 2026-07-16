@@ -1,6 +1,6 @@
 ---
 # Run PerformanceMonitor install scripts 01-54 in order against the target instance.
-# 00 (uninstall) and 97-99 (tests/troubleshooting) are skipped.
+# 00 (uninstall), 97(test procedures) and 99 (troubleshooting) are skipped here.
 # Install scripts are idempotent. Corresponding tasks report "changed" on every run;
 # that is expected.
 
@@ -25,10 +25,15 @@
         | sort
         | reject('search', '/00_')
         | reject('search', '/97_')
-        | reject('search', '/98_')
         | reject('search', '/99_')
         | list
       }}
+  delegate_to: localhost
+
+- name: Split off the validation script for explicit pass/fail handling
+  ansible.builtin.set_fact:
+    _validate_script: "{{ _install_scripts | select('search', '/98_') | first | default('') }}"
+    _install_scripts_main: "{{ _install_scripts | reject('search', '/98_') | list }}"
   delegate_to: localhost
 
 - name: Determine installation type for history record
@@ -59,13 +64,24 @@
           - -b
           - -i
           - "{{ item }}"
-      loop: "{{ _install_scripts }}"
+      loop: "{{ _install_scripts_main }}"
       loop_control:
         label: "{{ item | basename }}"
       environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
       changed_when: true
       no_log: true
+
+    - name: Install community tools
+      ansible.builtin.import_tasks: community_tools.yml
+
+    - name: Apply local patches
+      ansible.builtin.import_tasks: apply_local_patches.yml
+      when: perfmon_local_patches_dir | length > 0
+
+    - name: Run installation validation
+      ansible.builtin.import_tasks: validate_installation.yml
+      when: _validate_script | length > 0
 
     - name: Record installation in installation_history
       ansible.builtin.command:

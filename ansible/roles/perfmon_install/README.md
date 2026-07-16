@@ -11,20 +11,23 @@ on one or more SQL Server instances. All work runs on the Ansible control node v
 2. Reads the installed version from `config.installation_history`. If the installed version is
    older than `perfmon_version`, runs the applicable upgrade script directories in order and records
    the result in `installation_history`.
-3. Runs install scripts `01`-`54` in order.
-   if the database is already at `perfmon_version` unless `perfmon_force_reinstall: true`.
-4. Applies any local patches from `perfmon_local_patches_dir`.
-5. Installs community tools: `sp_WhoIsActive`, `DarlingData` suite, `FirstResponderKit`.
-6. Creates the reader SQL login (`perfmon_reader_login_name`, `grafana_reader` by default) and
-   makes it a member of `grafana_reader_role` - a
-   dedicated server role with `VIEW SERVER STATE` for alert queries that read live DMVs, and
-   `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` (granted as a pair) so the FinOps compression
-   scan can read `sys.tables`/`sys.indexes` across every database, each toggleable and on by
-   default - and a dedicated database role in `PerformanceMonitor` (SELECT on the `collect`,
-   `report`, and `config` schemas). The Queries dashboard's Real-Time Active Queries mode reads
-   `sys.dm_exec_requests`/`sys.dm_exec_sessions` directly, covered by `VIEW SERVER STATE`, with
-   no EXECUTE grant needed. Also adds `grafana_reader` to the built-in `SQLAgentReaderRole` on
-   `msdb`, for the Failed Collector Job alert - also toggleable, on by default.
+3. Runs the install scripts in order, then:
+   - installs community tools: `sp_WhoIsActive`, `DarlingData` suite, `FirstResponderKit`
+   - applies any local patches from `perfmon_local_patches_dir`
+   - runs `98_validate_installation.sql`
+
+   Skipped entirely if the database is already at `perfmon_version`, unless
+   `perfmon_force_reinstall: true`.
+4. Creates the reader SQL login (`grafana_reader` by default), a dedicated server role
+   (`grafana_reader_role`), and a dedicated database role in `PerformanceMonitor`. Each grant
+   below is toggleable and on by default:
+   - `VIEW SERVER STATE` - alert queries and the Queries dashboard's Real-Time Active Queries
+     mode read live DMVs (`sys.dm_exec_requests`/`sys.dm_exec_sessions`) directly
+   - `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` (granted as a pair) - lets the FinOps
+     compression scan read `sys.tables`/`sys.indexes` across every database
+   - SELECT on the `collect`, `report`, and `config` schemas in `PerformanceMonitor`
+   - membership in `msdb`'s built-in `SQLAgentReaderRole` - needed for the Failed Collector Job
+     alert
 
 `perfmon_state: absent`:
 
@@ -59,8 +62,9 @@ instructions if it cannot be found.
 | `perfmon_reader_grant_cross_db_metadata` | `true` | Grant `CONNECT ANY DATABASE` + `VIEW ANY DEFINITION` to `grafana_reader_role` (paired - `CONNECT ANY DATABASE` alone still hides catalog-view rows in databases the reader login isn't a member of). Required for the FinOps compression scan, which reads `sys.tables`/`sys.indexes` across every database. Set to `false` to revoke both and run with a narrower reader login. |
 | `perfmon_reader_grant_msdb_access` | `true` | Add the reader login to `msdb`'s built-in `SQLAgentReaderRole`, needed for the Running Jobs collector and Failed Collector Job alert. Set to `false` to drop the role membership and keep it out of `msdb`. |
 | `perfmon_reader_auth_mode` | `sql` | `sql` creates a SQL login (`perfmon_reader_login_name`) with `perfmon_reader_password`. `windows` creates an AD login/group via `CREATE LOGIN ... FROM WINDOWS` instead - see Windows Authentication below. |
-| `perfmon_reader_windows_principal` | - | Required when `perfmon_reader_auth_mode` is `windows`. Down-level form, e.g. `LAB\svc_grafana_reader` (an individual account) or `LAB\SQLReaders` (a group - lets an AD team add/remove readers with no Ansible re-run). Used as the login name directly - an AD account can't be renamed to match `perfmon_reader_login_name`. |
+| `perfmon_reader_windows_principal` | - | Required when `perfmon_reader_auth_mode` is `windows`. Down-level form, e.g. `LAB\svc_grafana_reader` (an individual account) or `LAB\SQLReaders` (a group). Used as the login name directly - an AD account can't be renamed to match `perfmon_reader_login_name`. |
 | `perfmon_db` | `PerformanceMonitor` | Database name. |
+| `perfmon_skip_validation_failures` | `false` | Treat validate installation problems as a warning instead of a failure. |
 | `sqlcmd_bin` | `sqlcmd` | Path to sqlcmd if not on PATH. |
 | `perfmon_tmp_dir` | `/tmp/perfmon-install` | Staging directory on the control node for the downloaded release zip and community tool files. Download/extract tasks run once per play, not once per host, so this must resolve to the same path for every host in a play. |
 | `perfmon_local_patches_dir` | `""` | Path to a directory of `.sql` patch files to apply after the install scripts. Leave empty to skip. |
