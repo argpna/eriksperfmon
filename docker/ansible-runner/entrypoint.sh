@@ -32,6 +32,10 @@ else
   LIMIT_ARGS=(--limit '!sqlad')
 fi
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 exec ansible-playbook \
   -i /workspace/ansible/inventory/docker \
   /workspace/ansible/playbooks/main.yml \

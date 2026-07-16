@@ -34,10 +34,17 @@ x-mssql-env: &mssql-env
   MSSQL_MEMORY_LIMIT_MB: "1536"
 
 x-mssql-deploy: &mssql-deploy
+  cpuset: "0,1"
   deploy:
     resources:
       limits:
         memory: 2g
+
+x-workload-deploy: &workload-deploy
+  deploy:
+    resources:
+      limits:
+        memory: 256m
 
 x-healthcheck-modern: &healthcheck-modern
   test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -b -Q 'SELECT 1' -o /dev/null"]
@@ -51,7 +58,6 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: perfmon-mssql-2022
     <<: *mssql-deploy
-    cpuset: "0,1"
     environment:
       <<: *mssql-env
     healthcheck:
@@ -79,6 +85,10 @@ services:
       context: .
       dockerfile: docker/ansible-runner/Dockerfile
     container_name: perfmon-ansible-runner
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     depends_on:
       mssql-2022:
         condition: service_healthy
@@ -111,8 +121,11 @@ services:
 
   # demo workload against mssql-2022
   workload:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    build:
+      context: .
+      dockerfile: docker/workload/Dockerfile
     container_name: perfmon-workload
+    <<: *workload-deploy
     depends_on:
       mssql-2022:
         condition: service_healthy
@@ -126,8 +139,11 @@ services:
 
   # memory-pressure workload against mssql-2025
   workload-memory:
-    image: mcr.microsoft.com/mssql/server:2025-latest
+    build:
+      context: .
+      dockerfile: docker/workload/Dockerfile
     container_name: perfmon-workload-memory
+    <<: *workload-deploy
     depends_on:
       mssql-2025:
         condition: service_healthy
@@ -142,6 +158,10 @@ services:
   grafana:
     image: grafana/grafana:12.2.9
     container_name: perfmon-grafana
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     ports:
       - "3000:3000"
     environment:
@@ -173,6 +193,10 @@ services:
       dockerfile: docker/samba-ad/Dockerfile
     container_name: perfmon-samba-ad
     hostname: sambadc
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     environment:
       DOMAIN: ${AD_REALM}
       DOMAINPASS: ${SAMBA_ADMIN_PASSWORD}
