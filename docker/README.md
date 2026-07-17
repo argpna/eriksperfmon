@@ -1,6 +1,6 @@
-# Docker demo environment
+# Docker environment
 
-Self-contained demo stack: SQL Server instances covering multiple versions and auth modes,
+Self-contained stack: SQL Server instances covering multiple versions and auth modes,
 workload generators, Grafana, and an Ansible runner that provisions everything automatically.
 See the Services table below for the current set.
 
@@ -32,7 +32,7 @@ the Grafana datasource (`Windows AD: Username + password`) all authenticate agai
 
 Domain identity is configured through `AD_DOMAIN`/`AD_REALM`/`AD_NETBIOS` in `.env`, the single
 source of truth referenced by `docker-compose.yml`, every `docker/*/*.sh` script in the AD
-profile, and `ansible/inventory/docker/hosts.yml` (via `lookup('env', ...)`). Change the domain
+profile, and `ansible/inventory/docker-ad/hosts.yml` (via `lookup('env', ...)`). Change the domain
 there, not in any individual file.
 
 Moving parts, in start order:
@@ -48,8 +48,11 @@ Moving parts, in start order:
    network-scoped names), registers the keytab via `mssql-conf`, then bootstraps
    `AD_NETBIOS\sqladmin` as sysadmin. Its healthcheck passes only after that bootstrap.
 3. `ansible-runner` detects the instance via its `mssql-ad.$AD_DOMAIN` network alias, waits
-   for the bootstrap, then runs the normal playbook - inventory host `sqlad` carries the
-   windows-mode variables. Without the profile the host is skipped via `--limit '!sqlad'`.
+   for the bootstrap, then runs the normal playbook with the `ansible/inventory/docker-ad/`
+   overlay inventory added (a second `-i`) - its `sqlad` host carries the windows-mode
+   variables. Without the profile the overlay is not loaded, so the default stack never
+   provisions a `sqlad` datasource, fleet row, or alert rules, and a stale `sqlad`
+   datasource from an earlier profile run is deleted as orphaned.
 
 Kerberos client config for the runner, Grafana, and `mssql-ad` is generated at `docker compose
 up` time from the `krb5_conf` entry in `docker-compose.yml`'s top-level `configs:` block (note
@@ -157,9 +160,10 @@ From inside the stack, use the container hostnames (`mssql-2022`, `mssql-2025`) 
 
 ## Ansible inventory
 
-The docker-internal inventory lives at `ansible/inventory/docker/`. It is only used by the
-`ansible-runner` container; it is not intended for use from the host. The host-facing inventory
-for production use is `ansible/inventory/`.
+The docker-internal inventory lives at `ansible/inventory/docker/`, with the opt-in AD
+instance in the `ansible/inventory/docker-ad/` overlay. Both are only used by the
+`ansible-runner` container; they are not intended for use from the host. The host-facing
+inventory is `ansible/inventory/`.
 
 ## Smoke-testing panels
 
