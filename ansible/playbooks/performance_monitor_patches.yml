@@ -9,81 +9,12 @@
   hosts: sql_servers
   gather_facts: false
 
-  pre_tasks:
-    - name: Set sqlcmd default binary name  # noqa: run-once[task]
-      ansible.builtin.set_fact:
-        _sqlcmd: "{{ sqlcmd_bin | default('sqlcmd') }}"
-      delegate_to: localhost
-      run_once: true
-
-    - name: Check sqlcmd in PATH  # noqa: run-once[task]
-      ansible.builtin.command:
-        argv:
-          - which
-          - "{{ _sqlcmd }}"
-      register: _sqlcmd_which
-      delegate_to: localhost
-      run_once: true
-      failed_when: false
-      changed_when: false
-
-    - name: Find sqlcmd at common install paths  # noqa: run-once[task]
-      ansible.builtin.stat:
-        path: "{{ item }}"
-      loop:
-        - /opt/mssql-tools18/bin/sqlcmd
-        - /opt/mssql-tools/bin/sqlcmd
-      register: _sqlcmd_stat
-      delegate_to: localhost
-      run_once: true
-      when: _sqlcmd_which.rc != 0
-
-    - name: Auto-set sqlcmd binary from discovered path  # noqa: run-once[task]
-      ansible.builtin.set_fact:
-        _sqlcmd: "{{ (_sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | first).stat.path }}"
-      delegate_to: localhost
-      run_once: true
-      when:
-        - _sqlcmd_which.rc != 0
-        - _sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
-
-    - name: Fail with install instructions if sqlcmd not found  # noqa: run-once[task]
-      ansible.builtin.fail:
-        msg: |
-          sqlcmd not found on the Ansible control node. Install Microsoft ODBC tools:
-            RHEL/Fedora:   sudo dnf install -y mssql-tools18 unixODBC-devel
-            Ubuntu/Debian: https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
-          After installing, either add /opt/mssql-tools18/bin to your PATH or set
-          sqlcmd_bin=/opt/mssql-tools18/bin/sqlcmd in your inventory/group_vars.
-      delegate_to: localhost
-      run_once: true
-      when:
-        - _sqlcmd_which.rc != 0
-        - _sqlcmd_stat.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0
-
-    # mirrors ansible/roles/perfmon_install/tasks/main.yml
-    - name: Set sqlcmd auth environment
-      ansible.builtin.set_fact:
-        _sqlcmd_auth_env: >-
-          {{ {'KRB5CCNAME': '/tmp/krb5cc_perfmon_' + inventory_hostname}
-             if perfmon_admin_auth_mode | default('sql') == 'windows'
-             else {'SQLCMDUSER': perfmon_admin_sql_user, 'SQLCMDPASSWORD': perfmon_admin_sql_password} }}
-      no_log: true
-
-    - name: Obtain kerberos ticket for the admin connection
-      ansible.builtin.command:
-        argv:
-          - kinit
-          - -c
-          - "/tmp/krb5cc_perfmon_{{ inventory_hostname }}"
-          - "{{ perfmon_admin_windows_upn }}"
-        stdin: "{{ perfmon_admin_windows_password }}"
-      delegate_to: localhost
-      changed_when: false
-      no_log: true
-      when: perfmon_admin_auth_mode | default('sql') == 'windows'
-
   tasks:
+    - name: Set sqlcmd connection facts
+      ansible.builtin.import_role:
+        name: perfmon_install
+        tasks_from: connection_facts
+
     - name: Gather patch files  # noqa: run-once[task]
       ansible.builtin.find:
         paths: "{{ perfmon_patches_dir | default(playbook_dir ~ '/../../patches') }}"
@@ -93,28 +24,9 @@
       delegate_to: localhost
       run_once: true
 
-    - name: Set derived connection fact
-      ansible.builtin.set_fact:
-        _mssql_server: >-
-          {{
-            ansible_host
-            + ('\\' + mssql_instance if mssql_instance | default('MSSQLSERVER') != 'MSSQLSERVER' else '')
-            + (',' + mssql_port | string if mssql_port is defined else '')
-          }}
-      delegate_to: localhost
-
     - name: Apply patches
       ansible.builtin.command:
-        argv:
-          - "{{ _sqlcmd }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - master
-          - -C
-          - -b
-          - -i
-          - "{{ item }}"
+        argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', item] }}"
       loop: "{{ _patch_find.files | map(attribute='path') | sort | list }}"
       loop_control:
         label: "{{ item | basename }}"

@@ -4,30 +4,30 @@
 #
 # perfmon_reader_auth_mode: sql (default) uses a SQL login named perfmon_reader_login_name.
 # perfmon_reader_auth_mode: windows uses an AD login/group (perfmon_reader_windows_principal) -
-# CREATE LOGIN ... FROM WINDOWS requires the instance to already be domain-joined with a
-# service keytab configured. Not automated by this role.
+# CREATE LOGIN ... FROM WINDOWS requires the instance to already be domain-joined. Not automated
+# by this role.
 
 - name: Compute reader login name
   ansible.builtin.set_fact:
     _reader_login_name: "{{ perfmon_reader_windows_principal if perfmon_reader_auth_mode == 'windows' else perfmon_reader_login_name }}"
 
+- name: Compute SQL-escaped variants of the reader login name and password
+  ansible.builtin.set_fact:
+    _reader_login_name_sql: "{{ _reader_login_name | replace(\"'\", \"''\") }}"
+    _reader_login_name_ident: "{{ _reader_login_name | replace(']', ']]') }}"
+    _reader_password_sql: "{{ perfmon_reader_password | replace(\"'\", \"''\") }}"
+  no_log: true
+
 - name: Create grafana_reader server login and server role
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -Q
-      - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name }}')
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-Q', _reader_server_sql] }}"
+  vars:
+    _reader_server_sql: >-
+        IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name_sql }}')
         {% if perfmon_reader_auth_mode == 'windows' %}
-            CREATE LOGIN [{{ _reader_login_name }}] FROM WINDOWS;
+            CREATE LOGIN [{{ _reader_login_name_ident }}] FROM WINDOWS;
         {% else %}
-            CREATE LOGIN [{{ _reader_login_name }}] WITH PASSWORD = N'{{ perfmon_reader_password }}', CHECK_POLICY = OFF;
+            CREATE LOGIN [{{ _reader_login_name_ident }}] WITH PASSWORD = N'{{ _reader_password_sql }}', CHECK_POLICY = OFF;
         {% endif %}
         IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader_role' AND type = 'R')
             CREATE SERVER ROLE grafana_reader_role;
@@ -43,8 +43,8 @@
         REVOKE CONNECT ANY DATABASE FROM grafana_reader_role;
         REVOKE VIEW ANY DEFINITION FROM grafana_reader_role;
         {% endif %}
-        IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 0
-            ALTER SERVER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name }}];
+        IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name_sql }}') = 0
+            ALTER SERVER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name_ident }}];
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
@@ -53,25 +53,18 @@
 
 - name: Create grafana_reader database user, database role, and schema permissions
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - "{{ perfmon_db }}"
-      - -C
-      - -b
-      - -Q
-      - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
-            CREATE USER [{{ _reader_login_name }}] FOR LOGIN [{{ _reader_login_name }}];
+    argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _reader_db_sql] }}"
+  vars:
+    _reader_db_sql: >-
+        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name_sql }}')
+            CREATE USER [{{ _reader_login_name_ident }}] FOR LOGIN [{{ _reader_login_name_ident }}];
         IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader_role' AND type = 'R')
             CREATE ROLE grafana_reader_role AUTHORIZATION dbo;
         GRANT SELECT ON SCHEMA::collect TO grafana_reader_role;
         GRANT SELECT ON SCHEMA::report  TO grafana_reader_role;
         GRANT SELECT ON SCHEMA::config  TO grafana_reader_role;
-        IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 0
-            ALTER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name }}];
+        IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name_sql }}') = 0
+            ALTER ROLE grafana_reader_role ADD MEMBER [{{ _reader_login_name_ident }}];
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
@@ -80,24 +73,17 @@
 
 - name: Manage grafana_reader SQLAgentReaderRole membership on msdb for collector job monitoring
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - msdb
-      - -C
-      - -b
-      - -Q
-      - >-
-        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
-            CREATE USER [{{ _reader_login_name }}] FOR LOGIN [{{ _reader_login_name }}];
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'msdb', '-x', '-b', '-Q', _reader_msdb_sql] }}"
+  vars:
+    _reader_msdb_sql: >-
+        IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name_sql }}')
+            CREATE USER [{{ _reader_login_name_ident }}] FOR LOGIN [{{ _reader_login_name_ident }}];
         {% if perfmon_reader_grant_msdb_access %}
-        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name }}') = 0
-            EXEC sp_addrolemember N'SQLAgentReaderRole', N'{{ _reader_login_name }}';
+        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name_sql }}') = 0
+            EXEC sp_addrolemember N'SQLAgentReaderRole', N'{{ _reader_login_name_sql }}';
         {% else %}
-        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name }}') = 1
-            EXEC sp_droprolemember N'SQLAgentReaderRole', N'{{ _reader_login_name }}';
+        IF IS_ROLEMEMBER(N'SQLAgentReaderRole', N'{{ _reader_login_name_sql }}') = 1
+            EXEC sp_droprolemember N'SQLAgentReaderRole', N'{{ _reader_login_name_sql }}';
         {% endif %}
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
@@ -107,20 +93,13 @@
 
 - name: Drop grafana_reader server role membership and role
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -Q
-      - >-
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-Q', _drop_server_role_sql] }}"
+  vars:
+    _drop_server_role_sql: >-
         IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'grafana_reader_role' AND type = 'R')
         BEGIN
-            IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 1
-                ALTER SERVER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name }}];
+            IF IS_SRVROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name_sql }}') = 1
+                ALTER SERVER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name_ident }}];
             DROP SERVER ROLE grafana_reader_role;
         END
   environment: "{{ _sqlcmd_auth_env }}"
@@ -131,24 +110,17 @@
 
 - name: Drop grafana_reader database role and user in PerformanceMonitor
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - "{{ perfmon_db }}"
-      - -C
-      - -b
-      - -Q
-      - >-
+    argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _drop_db_role_sql] }}"
+  vars:
+    _drop_db_role_sql: >-
         IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'grafana_reader_role' AND type = 'R')
         BEGIN
-            IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name }}') = 1
-                ALTER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name }}];
+            IF IS_ROLEMEMBER(N'grafana_reader_role', N'{{ _reader_login_name_sql }}') = 1
+                ALTER ROLE grafana_reader_role DROP MEMBER [{{ _reader_login_name_ident }}];
             DROP ROLE grafana_reader_role;
         END
-        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
-            DROP USER [{{ _reader_login_name }}];
+        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name_sql }}')
+            DROP USER [{{ _reader_login_name_ident }}];
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
@@ -157,18 +129,11 @@
 
 - name: Drop grafana_reader user in msdb
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - msdb
-      - -C
-      - -b
-      - -Q
-      - >-
-        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name }}')
-            DROP USER [{{ _reader_login_name }}];
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'msdb', '-x', '-b', '-Q', _drop_msdb_user_sql] }}"
+  vars:
+    _drop_msdb_user_sql: >-
+        IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'{{ _reader_login_name_sql }}')
+            DROP USER [{{ _reader_login_name_ident }}];
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true
@@ -177,24 +142,17 @@
 
 - name: Drop grafana_reader server login
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -Q
-      - >-
-        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name }}')
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-Q', _drop_login_sql] }}"
+  vars:
+    _drop_login_sql: >-
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'{{ _reader_login_name_sql }}')
         BEGIN
             DECLARE @kill nvarchar(max) = N'';
             SELECT @kill += N'KILL ' + CONVERT(nvarchar(12), session_id) + N';'
             FROM sys.dm_exec_sessions
-            WHERE login_name = N'{{ _reader_login_name }}';
+            WHERE login_name = N'{{ _reader_login_name_sql }}';
             IF @kill <> N'' EXEC sys.sp_executesql @kill;
-            DROP LOGIN [{{ _reader_login_name }}];
+            DROP LOGIN [{{ _reader_login_name_ident }}];
         END
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost

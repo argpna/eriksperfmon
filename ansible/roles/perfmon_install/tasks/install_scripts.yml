@@ -54,16 +54,7 @@
   block:
     - name: Run install scripts
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - master
-          - -C
-          - -b
-          - -i
-          - "{{ item }}"
+        argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', item] }}"
       loop: "{{ _install_scripts_main }}"
       loop_control:
         label: "{{ item | basename }}"
@@ -85,25 +76,18 @@
 
     - name: Record installation in installation_history
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - "{{ perfmon_db }}"
-          - -C
-          - -b
-          - -Q
-          - >-
+        argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _install_history_sql] }}"
+      vars:
+        _install_history_sql: >-
             INSERT INTO config.installation_history
                 (installer_version, installer_info_version, sql_server_version,
                  sql_server_edition, installation_type, previous_version,
                  installation_status, files_executed, files_failed)
             VALUES
-                (N'{{ _perfmon_version_clean }}', N'ansible',
+                (N'{{ _perfmon_version_clean_sql }}', N'ansible',
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
                  N'{{ _install_type }}',
-                 {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
+                 {{ ("N'" + _installed_version_clean_sql + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
                  N'SUCCESS', {{ _install_scripts | length }}, 0);
       environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
@@ -136,26 +120,19 @@
 
     - name: Record failed install in installation_history
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - "{{ perfmon_db }}"
-          - -C
-          - -b
-          - -Q
-          - >-
+        argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _failed_history_sql] }}"
+      vars:
+        _failed_history_sql: >-
             IF OBJECT_ID(N'config.installation_history') IS NOT NULL
             INSERT INTO config.installation_history
                 (installer_version, installer_info_version, sql_server_version,
                  sql_server_edition, installation_type, previous_version,
                  installation_status, files_executed, files_failed, installation_notes)
             VALUES
-                (N'{{ _perfmon_version_clean }}', N'ansible',
+                (N'{{ _perfmon_version_clean_sql }}', N'ansible',
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
                  N'{{ _install_type }}',
-                 {{ ("N'" + _installed_version_clean + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
+                 {{ ("N'" + _installed_version_clean_sql + "'") if _installed_version_clean | default('') | length > 0 else 'NULL' }},
                  N'FAILED', 0, 1, N'{{ _install_failure_note }}');
       environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost

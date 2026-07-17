@@ -50,16 +50,7 @@
 
 - name: Install community tools into PerformanceMonitor database
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - "{{ perfmon_db }}"
-      - -C
-      - -b
-      - -i
-      - "{{ perfmon_tmp_dir }}/community/{{ item.name }}.sql"
+    argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-i', perfmon_tmp_dir + '/community/' + item.name + '.sql'] }}"
   loop: "{{ perfmon_community_tools }}"
   loop_control:
     label: "{{ item.name }}"

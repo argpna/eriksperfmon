@@ -21,7 +21,7 @@
       secureJsonData:
         password: "{{ _reader_password }}"
       jsonData:
-        tlsSkipVerify: true
+        tlsSkipVerify: "{{ _h.ds_tls_skip_verify | default(true) | bool }}"
         encrypt: "{{ _h.ds_encrypt | default('true') }}"
         queryTimeout: "60"
         authenticationType: "{{ 'Windows AD: Username + password' if _reader_windows else 'SQL Server Authentication' }}"
@@ -64,7 +64,7 @@
       secureJsonData:
         password: "{{ _reader_password }}"
       jsonData:
-        tlsSkipVerify: true
+        tlsSkipVerify: "{{ _h.ds_tls_skip_verify | default(true) | bool }}"
         encrypt: "{{ _h.ds_encrypt | default('true') }}"
         queryTimeout: "120"
         authenticationType: "{{ 'Windows AD: Username + password' if _reader_windows else 'SQL Server Authentication' }}"

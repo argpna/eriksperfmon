@@ -5,19 +5,9 @@
 # captured from the instance itself and not the control node so it's immune to clock skew
 - name: Capture instance datetime before running validation
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -h
-      - "-1"
-      - -W
-      - -Q
-      - "SET NOCOUNT ON; SELECT CONVERT(varchar(33), SYSDATETIME(), 126);"
+    argv: >-
+      {{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-h', '-1', '-W', '-Q',
+         'SET NOCOUNT ON; SELECT CONVERT(varchar(33), SYSDATETIME(), 126);'] }}
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   register: _validate_clock
@@ -25,16 +15,7 @@
 
 - name: Run installation validation script
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -i
-      - "{{ _validate_script }}"
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', _validate_script] }}"
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   register: _validate_result
@@ -42,24 +23,14 @@
 
 - name: Query recent collector errors for a readable failure summary
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - "{{ perfmon_db }}"
-      - -C
-      - -b
-      - -h
-      - "-1"
-      - -W
-      - -Q
-      - >-
+    argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-h', '-1', '-W', '-Q', _recent_errors_sql] }}"
+  vars:
+    _recent_errors_sql: >-
         SET NOCOUNT ON;
         SELECT collector_name + N': ' + error_message
         FROM config.collection_log
         WHERE collection_status = N'ERROR'
-        AND   collection_time >= '{{ _validate_clock.stdout | trim }}'
+        AND   collection_time >= '{{ _validate_clock.stdout | trim | replace("'", "''") }}'
         ORDER BY collection_time DESC;
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost

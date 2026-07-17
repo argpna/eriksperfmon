@@ -49,6 +49,22 @@ perfmon_reader_grant_msdb_access: true
 # common locations: /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd sqlcmd
 sqlcmd_bin: sqlcmd
 
+# TLS behavior for the admin sqlcmd connections. Set false to validate the
+# server certificate against the control node's OS trust store.
+sqlcmd_trust_server_cert: true
+
+# encryption level: strict, mandatory, or optional (sqlcmd -Ns/-Nm/-No).
+# empty uses the driver default.
+sqlcmd_encryption: ""
+
+# path on the control node to the server certificate file (sqlcmd -J).
+# Only valid with sqlcmd_encryption: strict
+sqlcmd_server_certificate: ""
+
+# hostname expected in the server certificate when it differs from the connect
+# name (sqlcmd -F).
+sqlcmd_hostname_in_cert: ""
+
 # staging directory on the control node for the downloaded release zip and community
 # tool files. Shared across all hosts in a play (download/extract tasks run_once) -
 # do not set per-host in host_vars.

@@ -43,7 +43,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - {{ perfmon_alert_cpu_pct }}
+                      - {{ perfmon_alert_cpu_pct | float }}
                     type: gte
                   operator:
                     type: and
@@ -109,7 +109,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - {{ perfmon_alert_blocking_s }}
+                      - {{ perfmon_alert_blocking_s | float }}
                     type: gte
                   operator:
                     type: and
@@ -176,7 +176,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - {{ perfmon_alert_deadlock_count }}
+                      - {{ perfmon_alert_deadlock_count | int }}
                     type: gte
                   operator:
                     type: and
@@ -245,7 +245,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - {{ perfmon_alert_tempdb_pct }}
+                      - {{ perfmon_alert_tempdb_pct | float }}
                     type: gte
                   operator:
                     type: and
@@ -310,8 +310,8 @@ groups:
                       AND volume_total_mb > 0
                     GROUP BY volume_mount_point
                 ) v
-                WHERE v.free_mb / 1024.0 < {{ perfmon_alert_disk_free_gb }}
-                   OR v.free_mb * 100.0 / NULLIF(v.total_mb, 0) < {{ perfmon_alert_disk_free_pct }}
+                WHERE v.free_mb / 1024.0 < {{ perfmon_alert_disk_free_gb | float }}
+                   OR v.free_mb * 100.0 / NULLIF(v.total_mb, 0) < {{ perfmon_alert_disk_free_pct | float }}
                 OPTION(MAXDOP 1)
               refId: A
           - refId: C
@@ -381,7 +381,7 @@ groups:
                 CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) AS t
                 JOIN sys.dm_exec_sessions AS s ON s.session_id = r.session_id
                 WHERE r.session_id > 50
-                  AND r.total_elapsed_time >= {{ perfmon_alert_query_duration_floor_min }} * 60000
+                  AND r.total_elapsed_time >= {{ perfmon_alert_query_duration_floor_min | float }} * 60000
                   AND r.wait_type NOT LIKE N'%SP_SERVER_DIAGNOSTICS%'
                   AND r.wait_type NOT IN (N'WAITFOR', N'BROKER_RECEIVE_WAITFOR')
                   AND r.wait_type NOT IN (N'BACKUPTHREAD', N'BACKUPIO')
@@ -465,7 +465,7 @@ groups:
                       AND collection_time >= DATEADD(minute, -10, SYSDATETIME())
                     ORDER BY collection_time DESC
                 ) t
-                WHERE avg_ms_per_wait >= {{ perfmon_alert_poison_wait_floor_ms }}
+                WHERE avg_ms_per_wait >= {{ perfmon_alert_poison_wait_floor_ms | float }}
                 OPTION(MAXDOP 1, RECOMPILE)
               refId: A
           - refId: C

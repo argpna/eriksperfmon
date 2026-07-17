@@ -359,3 +359,8 @@ has no port set in inventory.
 
 `ds_host` and `ds_port` override `ansible_host` and `mssql_port` for the Grafana-side address
 when the address Grafana uses to reach SQL Server differs from what the control node uses.
+
+Per-instance TLS settings: `ds_encrypt` (default `'true'`) controls connection encryption;
+`ds_tls_skip_verify` (default `true`) skips server certificate validation, matching the self-signed
+certificate. Set `ds_tls_skip_verify: false` on an instance to validate the certificate - the signing
+CA must then be trusted by the Grafana host.

@@ -19,88 +19,21 @@
     quiet: true
   no_log: true
 
-- name: Check sqlcmd in PATH
-  ansible.builtin.command:
-    argv:
-      - which
-      - "{{ sqlcmd_bin }}"
-  register: _sqlcmd_which
-  delegate_to: localhost
-  run_once: true
-  failed_when: false
-  changed_when: false
-
-- name: Find sqlcmd at common install paths
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - /opt/mssql-tools18/bin/sqlcmd
-    - /opt/mssql-tools/bin/sqlcmd
-  register: _sqlcmd_stat
-  delegate_to: localhost
-  run_once: true
-  when: _sqlcmd_which.rc != 0
-
-- name: Auto-set sqlcmd_bin from discovered path
-  ansible.builtin.set_fact:
-    sqlcmd_bin: "{{ (_sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | first).stat.path }}"
-  delegate_to: localhost
-  run_once: true
-  when:
-    - _sqlcmd_which.rc != 0
-    - _sqlcmd_stat.results | selectattr('stat.exists', 'equalto', true) | list | length > 0
-
-- name: Fail with install instructions if sqlcmd not found
-  ansible.builtin.fail:
-    msg: |
-      sqlcmd not found on the Ansible control node. Install Microsoft ODBC tools:
-        RHEL/Fedora:   sudo dnf install -y mssql-tools18 unixODBC-devel
-        Ubuntu/Debian: https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
-      After installing, either add /opt/mssql-tools18/bin to your PATH or set
-      sqlcmd_bin=/opt/mssql-tools18/bin/sqlcmd in your inventory/group_vars.
-  delegate_to: localhost
-  run_once: true
-  when:
-    - _sqlcmd_which.rc != 0
-    - _sqlcmd_stat.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0
+- name: Set sqlcmd connection facts
+  ansible.builtin.import_tasks: connection_facts.yml
 
 - name: Set derived facts
   ansible.builtin.set_fact:
     _perfmon_version_clean: "{{ perfmon_version | regex_replace('^v', '') }}"
     _perfmon_zip: "{{ perfmon_tmp_dir }}/perfmon-{{ perfmon_version }}.zip"
-    _mssql_server: >-
-      {{
-        ansible_host
-        + ('\\' + mssql_instance if mssql_instance != 'MSSQLSERVER' else '')
-        + (',' + mssql_port | string if mssql_port is defined else '')
-      }}
   delegate_to: localhost
   run_once: false
 
-# every sqlcmd task passes credentials via this environment instead of -U/-P argv:
-# sql mode uses sqlcmd's SQLCMDUSER/SQLCMDPASSWORD variables, windows mode leaves them
-# unset (sqlcmd then defaults to integrated auth) and points KRB5CCNAME at a per-host
-# ticket cache filled by the kinit task below.
-- name: Set sqlcmd auth environment
+- name: Compute SQL-escaped version string
   ansible.builtin.set_fact:
-    _sqlcmd_auth_env: >-
-      {{ {'KRB5CCNAME': '/tmp/krb5cc_perfmon_' + inventory_hostname}
-         if perfmon_admin_auth_mode == 'windows'
-         else {'SQLCMDUSER': perfmon_admin_sql_user, 'SQLCMDPASSWORD': perfmon_admin_sql_password} }}
-  no_log: true
-
-- name: Obtain kerberos ticket for the admin connection
-  ansible.builtin.command:
-    argv:
-      - kinit
-      - -c
-      - "/tmp/krb5cc_perfmon_{{ inventory_hostname }}"
-      - "{{ perfmon_admin_windows_upn }}"
-    stdin: "{{ perfmon_admin_windows_password }}"
+    _perfmon_version_clean_sql: "{{ _perfmon_version_clean | replace(\"'\", \"''\") }}"
   delegate_to: localhost
-  changed_when: false
-  no_log: true
-  when: perfmon_admin_auth_mode == 'windows'
+  run_once: false
 
 - name: Create staging directory
   ansible.builtin.file:
@@ -163,16 +96,7 @@
 
 - name: Uninstall PerformanceMonitor
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -i
-      - "{{ _perfmon_install_dir }}/00_uninstall.sql"
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', _perfmon_install_dir + '/00_uninstall.sql'] }}"
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
   changed_when: true

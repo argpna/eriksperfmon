@@ -14,16 +14,7 @@
 
 - name: Apply local patches
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - master
-      - -C
-      - -b
-      - -i
-      - "{{ item }}"
+    argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', item] }}"
   loop: "{{ _local_patch_find.files | map(attribute='path') | sort | list }}"
   loop_control:
     label: "{{ item | basename }}"

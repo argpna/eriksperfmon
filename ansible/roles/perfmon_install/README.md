@@ -66,6 +66,10 @@ instructions if it cannot be found.
 | `perfmon_db` | `PerformanceMonitor` | Database name. |
 | `perfmon_skip_validation_failures` | `false` | Treat validate installation problems as a warning instead of a failure. |
 | `sqlcmd_bin` | `sqlcmd` | Path to sqlcmd if not on PATH. |
+| `sqlcmd_trust_server_cert` | `true` | Pass `-C` (TrustServerCertificate) to every sqlcmd connection. The default accepts SQL Server's out-of-box self-signed certificate without validation; traffic is still encrypted. Set to `false` to validate the server certificate. |
+| `sqlcmd_encryption` | `""` | Encryption level: `strict`, `mandatory`, or `optional` (sqlcmd `-Ns`/`-Nm`/`-No`). Empty uses the driver default (mandatory with mssql-tools18). |
+| `sqlcmd_server_certificate` | `""` | Control-node path to the server certificate file (sqlcmd `-J`). Only valid with `sqlcmd_encryption: strict`; the role fails fast otherwise. |
+| `sqlcmd_hostname_in_cert` | `""` | Hostname expected in the server certificate when it differs from the connect name (sqlcmd `-F`). |
 | `perfmon_tmp_dir` | `/tmp/perfmon-install` | Staging directory on the control node for the downloaded release zip and community tool files. Download/extract tasks run once per play, not once per host, so this must resolve to the same path for every host in a play. |
 | `perfmon_local_patches_dir` | `""` | Path to a directory of `.sql` patch files to apply after the install scripts. Leave empty to skip. |
 | `perfmon_community_dir` | `{{ playbook_dir }}/../../community` | Directory checked for a pre-seeded release zip and community tool `.sql` files before downloading. |
@@ -103,6 +107,23 @@ set to the FQDN matching the instance's `MSSQLSvc` SPN, and the principal alread
 sysadmin. The control node does **not** need to be domain-joined - a reachable KDC and valid
 credentials are enough. Note kerberos requires `mssql_port` to be present in the SPN, so keep
 `mssql_port` set.
+
+## TLS
+
+All connections are encrypted (the driver default). By default the role also passes `-C`
+(TrustServerCertificate), which skips certificate validation, and is open to MITM on an untrusted network.
+
+To validate the server certificate instead, set `sqlcmd_trust_server_cert: false` (per host or
+group). Validation then runs against the control node's OS trust store, so the CA that signed
+the instance's certificate must be installed there. If the certificate's subject doesn't match the name
+in `ansible_host`, set `sqlcmd_hostname_in_cert`.
+
+For TDS 8.0 strict encryption, set `sqlcmd_encryption: strict`; there the certificate can
+alternatively be pinned by file path with `sqlcmd_server_certificate` instead of going through
+the trust store. `-C`/`sqlcmd_trust_server_cert` has no effect in strict mode - the server cert
+must satisfy either the trust store or `-J`, no TrustServerCertificate escape hatch exists.
+Strict mode's minimum SQL Server version depends on the target's OS: 2022 (16.x) or later on
+Windows, 2025 (17.x) or later on Linux.
 
 ## Air-gapped installs
 

@@ -4,16 +4,10 @@
 
 - name: Check if PerformanceMonitor database exists
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -C
-      - -h
-      - "-1"
-      - -W
-      - -Q
-      - "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = N'{{ perfmon_db }}';"
+    argv: "{{ _sqlcmd_conn_args + ['-x', '-h', '-1', '-W', '-Q', _db_check_sql] }}"
+  vars:
+    _db_check_sql: >-
+        SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name = N'{{ perfmon_db | replace("'", "''") }}';
   register: _perfmon_db_check
   environment: "{{ _sqlcmd_auth_env }}"
   delegate_to: localhost
@@ -26,18 +20,9 @@
 
 - name: Read installed version from installation_history
   ansible.builtin.command:
-    argv:
-      - "{{ sqlcmd_bin }}"
-      - -S
-      - "{{ _mssql_server }}"
-      - -d
-      - "{{ perfmon_db }}"
-      - -C
-      - -h
-      - "-1"
-      - -W
-      - -Q
-      - >-
+    argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-h', '-1', '-W', '-Q', _installed_version_sql] }}"
+  vars:
+    _installed_version_sql: >-
         SET NOCOUNT ON;
         SELECT TOP(1) LTRIM(RTRIM(installer_version))
         FROM config.installation_history
@@ -63,6 +48,10 @@
     - _perfmon_db_exists | bool
     - not (_installed_version_raw.skipped | default(false) | bool)
     - _installed_version_raw.stdout | default('') | trim | length > 0
+
+- name: Compute SQL-escaped installed version string
+  ansible.builtin.set_fact:
+    _installed_version_clean_sql: "{{ _installed_version_clean | replace(\"'\", \"''\") }}"
 
 - name: Determine if upgrades are needed
   ansible.builtin.set_fact:
@@ -140,16 +129,7 @@
   block:
     - name: Run upgrade scripts
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - master
-          - -C
-          - -b
-          - -i
-          - "{{ item }}"
+        argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', item] }}"
       loop: "{{ _upgrade_scripts }}"
       loop_control:
         label: "{{ item | basename }}"
@@ -160,24 +140,17 @@
 
     - name: Record successful upgrade in installation_history
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - "{{ perfmon_db }}"
-          - -C
-          - -b
-          - -Q
-          - >-
+        argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _upgrade_history_sql] }}"
+      vars:
+        _upgrade_history_sql: >-
             INSERT INTO config.installation_history
                 (installer_version, installer_info_version, sql_server_version,
                  sql_server_edition, installation_type, previous_version,
                  installation_status, files_executed, files_failed)
             VALUES
-                (N'{{ _perfmon_version_clean }}', N'ansible',
+                (N'{{ _perfmon_version_clean_sql }}', N'ansible',
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
-                 N'UPGRADE', N'{{ _installed_version_clean }}', N'SUCCESS',
+                 N'UPGRADE', N'{{ _installed_version_clean_sql }}', N'SUCCESS',
                  {{ _upgrade_scripts | length }}, 0);
       environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
@@ -209,25 +182,18 @@
 
     - name: Record failed upgrade in installation_history
       ansible.builtin.command:
-        argv:
-          - "{{ sqlcmd_bin }}"
-          - -S
-          - "{{ _mssql_server }}"
-          - -d
-          - "{{ perfmon_db }}"
-          - -C
-          - -b
-          - -Q
-          - >-
+        argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-Q', _failed_upgrade_history_sql] }}"
+      vars:
+        _failed_upgrade_history_sql: >-
             IF OBJECT_ID(N'config.installation_history') IS NOT NULL
             INSERT INTO config.installation_history
                 (installer_version, installer_info_version, sql_server_version,
                  sql_server_edition, installation_type, previous_version,
                  installation_status, files_executed, files_failed, installation_notes)
             VALUES
-                (N'{{ _perfmon_version_clean }}', N'ansible',
+                (N'{{ _perfmon_version_clean_sql }}', N'ansible',
                  @@VERSION, CONVERT(nvarchar(512), SERVERPROPERTY(N'Edition')),
-                 N'UPGRADE', N'{{ _installed_version_clean }}', N'FAILED',
+                 N'UPGRADE', N'{{ _installed_version_clean_sql }}', N'FAILED',
                  0, 1, N'{{ _upgrade_failure_note }}');
       environment: "{{ _sqlcmd_auth_env }}"
       delegate_to: localhost
