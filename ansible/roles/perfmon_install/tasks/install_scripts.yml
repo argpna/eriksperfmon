@@ -6,8 +6,7 @@
 
 # potential footgun: with run_once the task executes on the play's first host only,
 # and if that host skips this whole file (already at target version) the fact is
-# never set for hosts that do need it - a mixed fleet then fails on the loop.
-# removing run_once from the two tasks below.
+# never set for hosts that do need it. removing run_once from the two tasks below.
 - name: Gather install script list
   ansible.builtin.find:
     paths: "{{ _perfmon_install_dir }}"
@@ -63,12 +62,28 @@
       changed_when: true
       no_log: true
 
-    - name: Install community tools
-      ansible.builtin.import_tasks: community_tools.yml
+    - name: Install community tools into PerformanceMonitor database
+      ansible.builtin.command:
+        argv: "{{ _sqlcmd_conn_args + ['-d', perfmon_db, '-x', '-b', '-i', perfmon_tmp_dir + '/community/' + item.name + '.sql'] }}"
+      loop: "{{ perfmon_community_tools }}"
+      loop_control:
+        label: "{{ item.name }}"
+      environment: "{{ _sqlcmd_auth_env }}"
+      delegate_to: localhost
+      changed_when: true
+      no_log: true
 
     - name: Apply local patches
-      ansible.builtin.import_tasks: apply_local_patches.yml
-      when: perfmon_local_patches_dir | length > 0
+      ansible.builtin.command:
+        argv: "{{ _sqlcmd_conn_args + ['-d', 'master', '-x', '-b', '-i', item] }}"
+      loop: "{{ _local_patch_files }}"
+      loop_control:
+        label: "{{ item | basename }}"
+      environment: "{{ _sqlcmd_auth_env }}"
+      delegate_to: localhost
+      changed_when: true
+      no_log: true
+      when: perfmon_state == 'present' and perfmon_local_patches_dir | length > 0
 
     - name: Run installation validation
       ansible.builtin.import_tasks: validate_installation.yml

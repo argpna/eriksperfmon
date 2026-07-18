@@ -12,10 +12,12 @@
       - perfmon_state != 'present' or perfmon_reader_auth_mode != 'windows'
         or perfmon_reader_windows_principal | default('') | length > 0
     fail_msg: >-
-      Missing credentials for the selected auth modes: sql admin mode needs perfmon_admin_sql_password,
-      windows admin mode needs perfmon_admin_windows_upn and perfmon_admin_windows_password,
-      sql reader mode needs perfmon_reader_password, windows reader mode needs
-      perfmon_reader_windows_principal. See README.md 'Required credentials'.
+      Missing credentials for the selected auth modes:
+        - sql admin mode needs perfmon_admin_sql_password.
+        - windows admin mode needs perfmon_admin_windows_upn and perfmon_admin_windows_password.
+        - sql reader mode needs perfmon_reader_password.
+        - windows reader mode needs perfmon_reader_windows_principal.
+      See README.md 'Required credentials'.
     quiet: true
   no_log: true
 
@@ -34,6 +36,34 @@
     _perfmon_version_clean_sql: "{{ _perfmon_version_clean | replace(\"'\", \"''\") }}"
   delegate_to: localhost
   run_once: false
+
+- name: Self-assign role defaults so hostvars comparison sees a real value for every host
+  ansible.builtin.set_fact:
+    perfmon_version: "{{ perfmon_version }}"
+    perfmon_community_tools: "{{ perfmon_community_tools }}"
+    perfmon_local_patches_dir: "{{ perfmon_local_patches_dir }}"
+    perfmon_community_dir: "{{ perfmon_community_dir }}"
+    sqlcmd_bin: "{{ sqlcmd_bin }}"
+  delegate_to: localhost
+  run_once: false
+
+- name: Assert control-node-local install configuration is identical across every host in this play
+  ansible.builtin.assert:
+    that:
+      - ansible_play_hosts_all | map('extract', hostvars, item) | unique | list | length == 1
+    fail_msg: >-
+      {{ item }} must be identical across every host in this play. Set it once,
+      fleet-wide (defaults/main.yml or a shared group_vars file), not per host.
+        Observed: {{ dict(ansible_play_hosts_all | zip(ansible_play_hosts_all | map('extract', hostvars, item))) }}
+    quiet: true
+  loop:
+    - perfmon_version
+    - perfmon_community_tools
+    - perfmon_local_patches_dir
+    - perfmon_community_dir
+    - sqlcmd_bin
+  run_once: true
+  delegate_to: localhost
 
 - name: Create staging directory
   ansible.builtin.file:
@@ -82,6 +112,68 @@
     _perfmon_upgrades_dir: "{{ perfmon_tmp_dir }}/PerformanceMonitor-{{ _perfmon_version_clean }}/upgrades"
   delegate_to: localhost
   run_once: true
+
+- name: Create community tools staging directory
+  ansible.builtin.file:
+    path: "{{ perfmon_tmp_dir }}/community"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+
+- name: Check for pre-seeded community tool files
+  ansible.builtin.stat:
+    path: "{{ perfmon_community_dir }}/{{ item.name }}.sql"
+  loop: "{{ perfmon_community_tools }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _community_preseeded
+  delegate_to: localhost
+  run_once: true
+
+- name: Copy pre-seeded community tools
+  ansible.builtin.copy:
+    src: "{{ perfmon_community_dir }}/{{ item.item.name }}.sql"
+    dest: "{{ perfmon_tmp_dir }}/community/{{ item.item.name }}.sql"
+    mode: "0644"
+  loop: "{{ _community_preseeded.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stat.exists
+  delegate_to: localhost
+  run_once: true
+
+- name: Download community tools
+  ansible.builtin.get_url:
+    url: "{{ item.item.url }}"
+    dest: "{{ perfmon_tmp_dir }}/community/{{ item.item.name }}.sql"
+    mode: "0644"
+  loop: "{{ _community_preseeded.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: not item.stat.exists
+  delegate_to: localhost
+  run_once: true
+  register: _download
+  retries: 4
+  delay: 30
+  until: _download is succeeded
+
+- name: Gather local patch files
+  ansible.builtin.find:
+    paths: "{{ perfmon_local_patches_dir }}"
+    patterns: "*.sql"
+    file_type: file
+  register: _local_patch_find
+  delegate_to: localhost
+  run_once: true
+  when: perfmon_local_patches_dir | length > 0
+
+- name: Set local patch file list fact
+  ansible.builtin.set_fact:
+    _local_patch_files: "{{ _local_patch_find.files | default([]) | map(attribute='path') | sort | list }}"
+  delegate_to: localhost
+  run_once: false
 
 - name: Run upgrade scripts
   ansible.builtin.import_tasks: upgrade_scripts.yml

@@ -1,9 +1,7 @@
 ---
-# Builds sqlcmd_bin (auto-discovered if not on PATH), _mssql_server, _sqlcmd_auth_env, and
-# _sqlcmd_conn_args, plus the kerberos ticket for the admin connection when
-# perfmon_admin_auth_mode is windows. Every sqlcmd call site in this role, and
-# ansible/playbooks/performance_monitor_patches.yml via
-# `import_role: {name: perfmon_install, tasks_from: connection_facts}`, depends on this.
+# Builds sqlcmd_bin , _mssql_server, _sqlcmd_auth_env, and _sqlcmd_conn_args
+# plus the kerberos ticket for the admin connection when perfmon_admin_auth_mode is windows
+# Every sqlcmd call site in this role depends on this.
 
 - name: Check sqlcmd in PATH
   ansible.builtin.command:
@@ -40,8 +38,7 @@
   ansible.builtin.fail:
     msg: |
       sqlcmd not found on the Ansible control node. Install Microsoft ODBC tools:
-        RHEL/Fedora:   sudo dnf install -y mssql-tools18 unixODBC-devel
-        Ubuntu/Debian: https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
+      See https://learn.microsoft.com/sql/linux/sql-server-linux-setup-tools
       After installing, either add /opt/mssql-tools18/bin to your PATH or set
       sqlcmd_bin=/opt/mssql-tools18/bin/sqlcmd in your inventory/group_vars.
   delegate_to: localhost
@@ -81,6 +78,7 @@
       sqlcmd_encryption must be strict, mandatory, or optional, and
       sqlcmd_server_certificate requires sqlcmd_encryption: strict
       (the driver silently ignores -J otherwise).
+    quiet: true
 
 # shared connection portion of every sqlcmd argv; call sites append their own
 # -d/-x/-b/-i/-Q flags.
