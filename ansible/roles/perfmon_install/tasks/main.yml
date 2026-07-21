@@ -1,22 +1,52 @@
 ---
-- name: Validate required credentials are set
+- name: Validate admin auth mode
   ansible.builtin.assert:
     that:
       - perfmon_admin_auth_mode in ['sql', 'windows']
+    fail_msg: >-
+      Invalid perfmon_admin_auth_mode '{{ perfmon_admin_auth_mode }}'. Must be sql or windows.
+      See README.md 'Required credentials'.
+    quiet: true
+  no_log: true
+
+- name: Validate admin credentials for the resolved auth mode
+  ansible.builtin.assert:
+    that:
       - perfmon_admin_auth_mode != 'sql' or perfmon_admin_sql_password | default('') | length > 0
       - perfmon_admin_auth_mode != 'windows' or (
           perfmon_admin_windows_upn | default('') | length > 0
           and perfmon_admin_windows_password | default('') | length > 0)
-      - perfmon_state != 'present' or perfmon_reader_auth_mode == 'windows'
+    fail_msg: >-
+      Missing admin credentials for auth mode {{ perfmon_admin_auth_mode }}.{%- if
+      perfmon_admin_auth_mode == 'windows' %}
+      windows admin mode needs perfmon_admin_windows_upn and perfmon_admin_windows_password.{%- else %}
+      sql admin mode needs perfmon_admin_sql_password.{%- endif %}
+      See README.md 'Required credentials'.
+    quiet: true
+  no_log: true
+
+- name: Validate reader auth mode
+  ansible.builtin.assert:
+    that:
+      - perfmon_reader_auth_mode in ['sql', 'windows']
+    fail_msg: >-
+      Invalid perfmon_reader_auth_mode '{{ perfmon_reader_auth_mode }}'. Must be sql or windows.
+      See README.md 'Required credentials'.
+    quiet: true
+  no_log: true
+
+- name: Validate reader credentials for the resolved auth mode
+  ansible.builtin.assert:
+    that:
+      - perfmon_state != 'present' or perfmon_reader_auth_mode != 'sql'
         or perfmon_reader_password | default('') | length > 0
       - perfmon_state != 'present' or perfmon_reader_auth_mode != 'windows'
         or perfmon_reader_windows_principal | default('') | length > 0
     fail_msg: >-
-      Missing credentials for the selected auth modes:
-        - sql admin mode needs perfmon_admin_sql_password.
-        - windows admin mode needs perfmon_admin_windows_upn and perfmon_admin_windows_password.
-        - sql reader mode needs perfmon_reader_password.
-        - windows reader mode needs perfmon_reader_windows_principal.
+      Missing reader credentials for auth mode {{ perfmon_reader_auth_mode }}.{%- if
+      perfmon_reader_auth_mode == 'windows' %}
+      windows reader mode needs perfmon_reader_windows_principal.{%- else %}
+      sql reader mode needs perfmon_reader_password.{%- endif %}
       See README.md 'Required credentials'.
     quiet: true
   no_log: true
