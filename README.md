@@ -17,7 +17,7 @@ analysis (FinOps). Both groups share the `$instance` datasource variable and lin
 
 | Dashboard | Description |
 |---|---|
-| **Fleet Overview** | Start here. Health summary across all instances: CPU, workers, memory grants, IO pressure, page contention, blocking, deadlocks, collection health. A severity score highlights instances under sustained pressure over the selected time range. Click an instance to open its Overview, then navigate to the relevant dashboard to dig into the cause. |
+| **Fleet Overview** | **Always start here**. Health summary across all instances: CPU, thread, and memory pressure, blocking, deadlocks, and collection health. A per-category severity score highlights instances in trouble in the last 15 minutes. Click an instance to open its Overview, then navigate to the relevant dashboard to dig into the cause. |
 | **Overview** | Stat bar, server info, CPU/memory/scheduler/sessions charts, daily summary, recommendations, DDL events, configuration history, collection health, running SQL Agent jobs |
 | **Queries** | Query CPU trends, active query snapshots (sp_WhoIsActive), top queries by CPU/reads, procedure stats, parameter sensitivity detection, long-running patterns, Query Store |
 | **Resource Metrics** | Wait stats, TempDB space and contention, file I/O latency and throughput, perfmon counters, session stats, latch and spinlock contention |
@@ -156,10 +156,11 @@ always a hostname, port, firewall, or wrong database name issue.
 
 ### Step 3: Import the dashboards
 
-Download the JSON files from [ansible/roles/perfmon_grafana/files/grafana/dashboards/perfmon](ansible/roles/perfmon_grafana/files/grafana/dashboards/perfmon) and
-import them in Grafana via **Dashboards - Import**. All dashboards (perfmon and FinOps) are in
-that single directory - dashboards link to each other by UID and navigation links will not work
-unless all are present.
+Download the JSON files from [ansible/roles/perfmon_grafana/files/grafana/dashboards/perfmon](ansible/roles/perfmon_grafana/files/grafana/dashboards/perfmon) and import them in Grafana via **Dashboards - Import**. The dashboards
+link to each other by UID and navigation links will not work unless all are present. The exception
+is `fleet-overview-v2.json`, a schema-v2 resource the import page cannot read -
+see [Fleet Overview](#fleet-overview) below for when and how to import it instead of the classic
+fleet file.
 
 After importing, open any dashboard and select an instance from the **Instance** dropdown at the
 top. If the dropdown is empty, go back to Step 2 and confirm the datasource name starts with
@@ -175,10 +176,33 @@ Discovers instances automatically from all datasources matching `^PerfMon-`. It 
 the box as long as your datasources are named correctly. Each instance gets its own panel row
 showing its health metrics and a color-coded severity score computed over the selected time range.
 
+The dynamic fleet ships as two files with the same dashboard UID - import the one
+matching your Grafana:
+
+- `fleet-overview.json` - classic dashboard JSON for Grafana version < 12.4, imported like every
+  other dashboard.
+
+- `fleet-overview-v2.json` - dashboard schema v2. One health card per instance, arranged
+  in the same card grid the upstream desktop app's landing page uses: every signal that
+  feeds the severity score is a colored tile, with the severity score in the last tile.
+  Click a card to open the instance. Requires Grafana >= 12.4 with the
+  `dashboardNewLayouts` feature toggle enabled (`GF_FEATURE_TOGGLES_ENABLE=dashboardNewLayouts`).
+  Import it via the dashboards HTTP API, not the UI import page:
+
+  ```bash
+  curl -X PUT -H "Authorization: Bearer $GRAFANA_API_KEY" -H "Content-Type: application/json" \
+    -d @fleet-overview-v2.json \
+    "$GRAFANA_URL/apis/dashboard.grafana.app/v2beta1/namespaces/default/dashboards/perfmon-fleet"
+  ```
+> [!NOTE]
+> Schema v2 provides better UX because the name/severity filters can hide a filtered-out
+> instance's card entirely. On the other hand, classic repeated panels can only empty a card's
+> data, not remove/hide the panel itself.
+
 > [!IMPORTANT]
-> **Limitation**: panels are ordered alphabetically by datasource name. There is no way to sort the
-> fleet by severity score in this mode. For small to medium fleets, use the **Filter instances**
-> textbox to narrow by name.
+> **Limitation**: panels are ordered alphabetically by datasource name. There is no way to sort
+> the fleet by severity score in this mode - the v2 severity filter hides instances but cannot
+> reorder them. Use the static fleet for severity-sorted ordering.
 
 **Static fleet (sortable, requires extra setup)**
 
@@ -496,6 +520,17 @@ automatically on the next dashboard refresh with no dashboard changes required. 
 ordering: Grafana's panel-repeat mechanism is alphabetical and cannot be reordered by a computed
 metric value such as severity score.
 
+The schema-v2 variant (`fleet-overview-v2.json`) renders each instance as a health card
+and adds a severity filter: instances outside the selected severity levels are hidden via
+conditional rendering. Only a successful zero-row result hides a card - an instance whose
+query errors (unreachable host, bad credentials) stays visible with its error, so a down
+instance cannot silently disappear from the fleet view. The
+Ansible role imports the v2 variant when the target Grafana supports it (version >= 12.4 and the
+`dashboardNewLayouts` feature toggle, probed via `/api/frontend/settings`) and falls back to the
+v1 file otherwise; both share the `perfmon-fleet` UID so navigation links work in either case.
+The gate is version-based because older Grafana accepts and stores the v2 resource but evaluates
+the show/hide rule for all repeated copies together.
+
 **Static fleet** - The builder's `--fleet-instances` flag generates an alternative fleet JSON
 that uses Grafana's Mixed datasource. One SQL query per named instance, all results merged into a
 single table by Grafana's Merge transform. The merged table can be sorted by any column, including
@@ -505,25 +540,30 @@ the file.
 
 ### Severity score
 
-Both fleet modes compute a severity score per instance over the selected Grafana time range. The
-score is additive (max 23) with two tiers of signals:
+Both fleet modes compute a severity score per instance over a fixed trailing 15-minute window,
+independent of the dashboard's selected time range. Health signals are grouped into categories; each category is scored 0 (healthy), 1 (warning), or 2 (critical) by its **worst** signal, and the overall score is
 
-| Signal | Metric | Points |
-|---|---|---|
-| Hard - CPU | avg `total_cpu_utilization` > 85% / > 50% | 3 / 1 |
-| Hard - Workers | max `total_current_workers_count` pct > 90% / > 70% | 3 / 1 |
-| Hard - Memory grants | max `waiter_count` > 5 / > 1 | 3 / 1 |
-| Hard - RESOURCE_SEMAPHORE | wait time ms per minute > 100 / > 10 | 3 / 1 |
-| Hard - IO pressure | file stall + `PAGEIOLATCH_*` wait ms per minute > 500 / > 50 | 3 / 1 |
-| Soft - Page contention | `PAGELATCH_*` wait ms per minute > 100 / > 10 (GAM/SGAM/PFS/TempDB allocation) | 2 / 1 |
-| Soft - Runnable | avg `avg_runnable_tasks_count` > 20 / > 5 | 2 / 1 |
-| Soft - Blocking | total `blocking_event_count_delta` > 25 / > 1 | 2 / 1 |
-| Soft - Deadlocks | total `deadlock_count_delta` > 10 / > 1 | 2 / 1 |
+```
+severity = 10 x (critical categories) + (warning categories)
+```
 
-All metrics are aggregated over `$__timeFilter` (averages and sums).
+so any instance with a critical category (score >= 10) outranks any number of warnings.
+Displayed as a color-coded badge: no color at 0, yellow from 1, red from 10.
 
-The score is displayed as a color-coded badge: no color below 3, yellow at 3-5, red at 6 and
-above.
+Wait-based signals (marked *avg waiting* below) are normalized to the average number of
+sessions concurrently in that wait: `SUM(wait_time_ms_delta) / 1000 / elapsed seconds` over
+the trailing window. Unlike the point-in-time gauges the collectors sample once per cycle, wait
+deltas integrate over the interval, so burst pressure that resolves between samples still
+registers. The named wait types are upstream's poison-wait set.
+
+| Category | Signals (warning / critical) |
+|---|---|
+| CPU | avg `total_cpu_utilization` > 80% / > 90% |
+| Threads | active workers pct of max > 70% / > 90%; `THREADPOOL` avg waiting > 0.01 / > 0.1 |
+| Memory | `RESOURCE_SEMAPHORE`(`_QUERY_COMPILE`) avg waiting > 0.01 / > 0.1 |
+| Blocking | raw blocked-process-report event count in the trailing window > 1 / > 25; max block duration >= 10s / >= 60s |
+| Deadlocks | total `deadlock_count` >= 1 / >= 10 |
+| Collectors | any collector erroring in the last 5 minutes (warning only) |
 
 ### Ansible roles
 
@@ -600,6 +640,12 @@ notifications from Erik's upstream notification engine. Rules evaluate every min
 All thresholds are Ansible variables defined in `roles/perfmon_grafana/defaults/main.yml`. Override
 per-host in `host_vars/` or per-group in `group_vars/`.
 
+> [!NOTE]
+> These rules are intentionally independent of the Fleet Overview severity score (see
+> [Severity score](#severity-score)) - crossing an alert threshold does not require the fleet
+> category to be red, and vice versa. The severity score is still being tuned, and coupling live
+> notifications to it risks a barrage of alerts from noisy or miscalibrated categories.
+
 ### Default behavior: silent
 
 Alerts fire and are tracked in Grafana but no notifications are sent until a contact point is
@@ -656,7 +702,7 @@ The following capabilities from Erik's C# WPF dashboard cannot be replicated in 
 | **FinOps cost attribution** | The upstream stores a user-supplied monthly server cost per connection and uses it to compute proportional cost shares by storage, CPU, and wait time across the FinOps tabs. Grafana has no per-datasource config store for this value, so these columns are omitted. |
 
 > [!CAUTION]
-> ### Monitoring blindspot under severe worker exhaustion
+> **Monitoring blindspot under severe worker exhaustion**
 >
 > Grafana queries each monitored SQL Server directly over a live TCP connection, the monitoring
 > queries compete for the same worker threads and memory grants as application workload. Under
@@ -699,7 +745,7 @@ correctly because the offset is evaluated live at query time.
 
 ## License
 
-This repo is released under the [MIT License](LICENSE).
+[MIT License](LICENSE).
 
 ### Dependency licenses
 
@@ -712,7 +758,11 @@ This repo is released under the [MIT License](LICENSE).
 
 > [!NOTE]
 > DarlingData, First Responder Kit, and sp_WhoIsActive are installed at runtime by the
-> Ansible role and are not bundled in this repository. Erik's PerformanceMonitor is also
-> fetched at runtime, except for a small set of local bug-fix patches in
-> [`patches/`](patches/), which modify specific upstream procedures and retain the
-> original MIT copyright header.
+> Ansible role and are not bundled in this repository. Erik's PerformanceMonitor install
+> scripts and stored procedures are also fetched at runtime, except for a small set of local
+> bug-fix patches in [`patches/`](patches/), which modify specific upstream procedures and
+> retain the original MIT copyright header. The Grafana panel SQL in
+> [`dashboard_defs/`](ansible/roles/perfmon_grafana/files/dashboard_defs/) is bundled in this
+> repository: query logic (column expressions, aggregation, CASE branches) is copied from
+> PerformanceMonitor's C# dashboard queries and reworked to run through Grafana's macros,
+> permitted under PerformanceMonitor's MIT license.

@@ -156,7 +156,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:12.2.9
+    image: grafana/grafana:12.4.5
     container_name: perfmon-grafana
     deploy:
       resources:
@@ -169,6 +169,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_UNIFIED_ALERTING_ENABLED: "true"
       GF_ALERTING_ENABLED: "false"
+      # dynamic dashboards: required for the v2 fleet dashboard's
+      # conditional rendering.
+      GF_FEATURE_TOGGLES_ENABLE: dashboardNewLayouts
     volumes:
       - grafana-data:/var/lib/grafana
     configs:
@@ -181,12 +184,7 @@ services:
       retries: 12
       start_period: 20s
 
-  # Opt-in, for AD-auth ansible tests: `docker compose --profile ad up -d` adds a Samba AD DC
-  # and an AD-authenticated SQL Server instance. SQL Server's Kerberos auth - CREATE LOGIN
-  # FROM WINDOWS and kerberos client logins interoperates with this Samba AD DC, provided the
-  # DNS prerequisites exist (NetBIOS-name A record, reverse zone with DC PTR - created by
-  # docker/samba-ad/provision-ad.sh) and the SQL container has an FQDN hostname with resolv.conf
-  # pointed directly at the DC (docker/mssql-ad/entrypoint.sh).
+  # Opt-in profile for AD-auth ansible tests: `docker compose --profile ad up -d`
   samba-ad:
     build:
       context: .

@@ -18,7 +18,7 @@ import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 # pylint: disable=wrong-import-position
 from dashboard_defs._shared import OUT, reset_id
-from dashboard_defs.fleet import fleet, fleet_static
+from dashboard_defs.fleet import fleet, fleet_static, fleet_v2
 from dashboard_defs.instance_overview import instance_overview
 from dashboard_defs.queries import queries
 from dashboard_defs.waits import waits
@@ -122,6 +122,9 @@ def main() -> None:
         print(f"wrote {path}")
 
     fleet_path = out / "fleet-overview.json"
+    # Schema-v2 variant of the dynamic fleet - conditional rendering hides
+    # filtered-out instances.
+    fleet_v2_path = out / "fleet-overview-v2.json"
     reset_id()
     if args.fleet_instances:
         raw = args.fleet_instances.strip()
@@ -143,9 +146,19 @@ def main() -> None:
         print(
             f"wrote {fleet_path} (static fleet, {len(names)} instances, sorted by severity)"
         )
+        # static mode covers filtering and sorting natively; drop a stale v2
+        # dynamic variant so the output dir has one fleet flavor
+        if fleet_v2_path.exists():
+            fleet_v2_path.unlink()
+            print(f"removed {fleet_v2_path} (static fleet replaces it)")
     else:
         fleet_path.write_text(json.dumps(fleet(), indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {fleet_path} (dynamic fleet)")
+        reset_id()
+        fleet_v2_path.write_text(
+            json.dumps(fleet_v2(), indent=2, ensure_ascii=False) + "\n"
+        )
+        print(f"wrote {fleet_v2_path} (dynamic fleet, schema v2)")
 
 
 if __name__ == "__main__":

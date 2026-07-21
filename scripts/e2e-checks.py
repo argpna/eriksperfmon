@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Assert a provisioned demo stack end-to-end through the Grafana API.
+"""Assert a provisioned stack is wired up correctly, via the Grafana API.
 
-For each <datasource-uid>:<sql|windows> argument:
+Checked unconditionally:
+  - the fleet dashboard was imported in the schema variant matching the
+    target Grafana's capabilities (schema-v2 AutoGridLayout vs classic v1)
+
+Checked for each <datasource-uid>:<sql|windows> argument:
   - the datasource exists and its auth type matches the expected mode
   - a live query through it succeeds, proving the stored credentials
     authenticate against SQL Server
@@ -104,6 +108,55 @@ def _check_instance(key: str, uid: str, mode: str, rules: list) -> list[str]:
     return failures
 
 
+def _version_at_least(version: str, want: tuple[int, int]) -> bool:
+    parts = version.split(".")
+    try:
+        got = (int(parts[0]), int(parts[1]))
+    except (ValueError, IndexError):
+        return False
+    return got >= want
+
+
+def _check_fleet_dashboard(key: str) -> list[str]:
+    """Assert the fleet dashboard exists in the variant this Grafana supports,
+    mirroring the role's import gate."""
+    try:
+        settings = _request(key, "/api/frontend/settings")
+    except urllib.error.HTTPError as err:
+        return [f"fleet: frontend settings probe failed ({err.code})"]
+    version = settings.get("buildInfo", {}).get("version", "0")
+    toggle = settings.get("featureToggles", {}).get("dashboardNewLayouts", False)
+    v2_expected = toggle and _version_at_least(version, (12, 4))
+
+    if v2_expected:
+        try:
+            dash = _request(
+                key,
+                "/apis/dashboard.grafana.app/v2beta1/namespaces/default"
+                "/dashboards/perfmon-fleet",
+            )
+        except urllib.error.HTTPError as err:
+            return [f"fleet: v2 dashboard lookup failed ({err.code})"]
+        layout_kind = dash.get("spec", {}).get("layout", {}).get("kind", "")
+        if layout_kind != "AutoGridLayout":
+            return [
+                f"fleet: expected schema-v2 AutoGridLayout, got {layout_kind!r} "
+                "(v1 fallback imported despite v2 support?)"
+            ]
+        print(f"  perfmon-fleet: schema-v2 variant imported (Grafana {version})")
+    else:
+        try:
+            dash = _request(key, "/api/dashboards/uid/perfmon-fleet")
+        except urllib.error.HTTPError as err:
+            return [f"fleet: v1 dashboard lookup failed ({err.code})"]
+        if "panels" not in dash.get("dashboard", {}):
+            return ["fleet: v1 dashboard has no panels"]
+        print(
+            f"  perfmon-fleet: v1 variant imported (Grafana {version}, no v2 support)"
+        )
+    return []
+
+
 def main() -> None:
     specs = []
     for arg in sys.argv[1:]:
@@ -117,7 +170,7 @@ def main() -> None:
     key = _api_key()
     rules = _request(key, "/api/v1/provisioning/alert-rules")
 
-    failures = []
+    failures = _check_fleet_dashboard(key)
     for uid, mode in specs:
         failures += _check_instance(key, uid, mode, rules)
 

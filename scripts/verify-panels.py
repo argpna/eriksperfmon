@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
 """Smoke-test every panel query in every dashboard through the Grafana query API.
 
-Derives template-variable substitutions from each dashboard's own `templating.list`,
-walks panels recursively. Zero rows is not a failure; a SQL error is.
-
-Cannot detect: a variable's cold-load interpolation behavior. This script builds its own
-substitution SQL in Python and calls /api/ds/query directly, bypassing Grafana's frontend
-variable-interpolation engine entirely. Real Grafana collapses ${var:sqlstring} to a
-zero-length token (not an empty quoted string) on a dashboard's first/cold load when the
-variable's value is "" - this script's _sqlstring() always quotes, so it cannot reproduce
-that divergence. A regression to an empty-string default on a new optional textbox filter
-will smoke-test clean here and still break on first page load. See _shared.py's text_var()
-- its `default` argument has no fallback for this reason.
+Derives template-variable substitutions from each dashboard's own variable list,
+walks panels recursively. Handles both classic v1 dashboard JSON and
+dashboard.grafana.app/v2 resources.
 
 Environment variables:
   GRAFANA_API_KEY         Grafana service account token (preferred)
@@ -52,6 +44,10 @@ RETRY_ATTEMPTS = 4
 RETRY_DELAY_SECONDS = 15
 
 NON_SQL_VARIABLE_TYPES = {"datasource"}
+NON_SQL_VARIABLE_KINDS = {"DatasourceVariable"}
+
+# Grafana's reserved "All selected" sentinel for multi-value variables.
+ALL_VARIABLE_VALUE = "$__all"
 
 # Escape hatch: only needed when a variable's own `current.value` in the dashboard JSON
 # isn't a good smoke-test value e.g. would trivially return 0 rows for a reason that
@@ -73,13 +69,29 @@ def _sqlstring(value: str) -> str:
     return "'" + _escape_sql_string(value) + "'"
 
 
+def _is_v2_dashboard(dash: dict) -> bool:
+    """True for a dashboard.grafana.app/v2* resource (kind/spec shape), False for
+    classic v1 dashboard JSON."""
+    return dash.get("kind") == "Dashboard" and "spec" in dash
+
+
 def _dashboard_subs(dash: dict) -> dict[str, str]:
-    """Build the ${name} -> escaped-only value table for one dashboard, derived from its
-    own templating.list instead of a hand-maintained global dict."""
+    """Build the ${name} -> escaped-only value table for one dashboard, derived from
+    its own variable list (v1 templating.list or v2 spec.variables) instead of a
+    hand-maintained global dict."""
+    if _is_v2_dashboard(dash):
+        variables = [
+            (v.get("kind"), v.get("spec", {}))
+            for v in dash["spec"].get("variables", [])
+        ]
+    else:
+        variables = [
+            (v.get("type"), v) for v in dash.get("templating", {}).get("list", [])
+        ]
     subs = {}
-    for var in dash.get("templating", {}).get("list", []):
+    for kind, var in variables:
         name = var.get("name")
-        if not name or var.get("type") in NON_SQL_VARIABLE_TYPES:
+        if not name or kind in NON_SQL_VARIABLE_TYPES | NON_SQL_VARIABLE_KINDS:
             continue
         if name in SUBS_OVERRIDES:
             value = SUBS_OVERRIDES[name]
@@ -88,6 +100,8 @@ def _dashboard_subs(dash: dict) -> dict[str, str]:
             value = current.get("value", "")
             if isinstance(value, list):
                 value = value[0] if value else ""
+            if value == ALL_VARIABLE_VALUE:
+                value = var.get("allValue") or ""
         subs[name] = str(value)
     return subs
 
@@ -95,6 +109,7 @@ def _dashboard_subs(dash: dict) -> dict[str, str]:
 def _apply_subs(sql: str, subs: dict[str, str]) -> str:
     for name, value in subs.items():
         sql = sql.replace(f"${{{name}:sqlstring}}", _sqlstring(value))
+        sql = sql.replace(f"${{{name}:csv}}", _escape_sql_string(value))
         sql = sql.replace(f"${{{name}}}", _escape_sql_string(value))
     return sql
 
@@ -106,6 +121,46 @@ def iter_panels(panels):
         yield panel
         if panel.get("type") == "row" and panel.get("panels"):
             yield from iter_panels(panel["panels"])
+
+
+def _is_text_only(dash: dict) -> bool:
+    """True when every panel is a text panel (e.g. a dashboard documenting an
+    upstream feature that cannot run as a Grafana query), so zero extractable
+    queries is legitimate rather than a walker blind spot."""
+    if _is_v2_dashboard(dash):
+        elements = dash["spec"].get("elements", {}).values()
+        groups = [e.get("spec", {}).get("vizConfig", {}).get("group") for e in elements]
+        return bool(groups) and all(g == "text" for g in groups)
+    panels = [p for p in iter_panels(dash.get("panels", [])) if p.get("type") != "row"]
+    return bool(panels) and all(p.get("type") == "text" for p in panels)
+
+
+def iter_queries(dash: dict):
+    """Yield (panel_title, format, rawSql) for every SQL query in a dashboard,
+    handling both classic v1 JSON and dashboard.grafana.app/v2* resources."""
+    if _is_v2_dashboard(dash):
+        for element in dash["spec"].get("elements", {}).values():
+            panel_spec = element.get("spec", {})
+            queries = panel_spec.get("data", {}).get("spec", {}).get("queries", [])
+            for q in queries:
+                query_spec = q.get("spec", {}).get("query", {}).get("spec", {})
+                sql = query_spec.get("rawSql")
+                if sql:
+                    yield (
+                        panel_spec.get("title", "(untitled)"),
+                        query_spec.get("format", "table"),
+                        sql,
+                    )
+        return
+    for panel in iter_panels(dash.get("panels", [])):
+        for t in panel.get("targets", []):
+            sql = t.get("rawSql")
+            if sql:
+                yield (
+                    panel.get("title", "(untitled)"),
+                    t.get("format", "table"),
+                    sql,
+                )
 
 
 def run_query(ds_uid: str, sql: str, fmt: str):
@@ -201,25 +256,29 @@ def main() -> None:
             continue
         name = f.name
         subs = _dashboard_subs(dash)
-        for panel in iter_panels(dash.get("panels", [])):
-            for t in panel.get("targets", []):
-                sql = t.get("rawSql")
-                if not sql:
-                    continue  # builder-mode / non-SQL target, nothing to smoke-test
-                sql = _apply_subs(sql, subs)
-                for ds_uid in DS_UIDS:
-                    tested += 1
-                    status, detail = run_query_with_retry(
-                        ds_uid, sql, t.get("format", "table")
-                    )
-                    flag = ""
-                    if status == "ERROR":
-                        failures += 1
-                        flag = "  <<< FAIL"
-                        detail = str(detail)[:160]
-                    prefix = f"{name:28s} | {panel.get('title', '(untitled)')[:52]:52s}"
-                    suffix = f"[{ds_uid}]" if len(DS_UIDS) > 1 else ""
-                    print(f"{prefix} | {status} {detail}{flag} {suffix}")
+        extracted = 0
+        for title, fmt, sql in iter_queries(dash):
+            extracted += 1
+            sql = _apply_subs(sql, subs)
+            for ds_uid in DS_UIDS:
+                tested += 1
+                status, detail = run_query_with_retry(ds_uid, sql, fmt)
+                flag = ""
+                if status == "ERROR":
+                    failures += 1
+                    flag = "  <<< FAIL"
+                    detail = str(detail)[:160]
+                prefix = f"{name:28s} | {title[:52]:52s}"
+                suffix = f"[{ds_uid}]" if len(DS_UIDS) > 1 else ""
+                print(f"{prefix} | {status} {detail}{flag} {suffix}")
+        if extracted == 0:
+            if _is_text_only(dash):
+                print(f"{name:28s} | text-only dashboard, no queries to test")
+            else:
+                failures += 1
+                print(
+                    f"{name:28s} | <<< NO EXTRACTABLE QUERIES - unknown dashboard shape?"
+                )
     print(f"\n{tested} panel queries checked across {len(DS_UIDS)} datasource(s)")
     print(f"{f'FAILURES: {failures}' if failures else 'ALL PANEL QUERIES OK'}")
     sys.exit(1 if failures else 0)

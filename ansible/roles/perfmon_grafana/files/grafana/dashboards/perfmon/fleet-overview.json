@@ -36,24 +36,6 @@
         "includeAll": true,
         "sort": 1,
         "description": "Monitored SQL Server instance - one MSSQL datasource per instance. Type to search."
-      },
-      {
-        "name": "filter",
-        "label": "Filter instances",
-        "type": "textbox",
-        "query": "",
-        "current": {
-          "text": "*",
-          "value": "*"
-        },
-        "options": [
-          {
-            "text": "*",
-            "value": "*"
-          }
-        ],
-        "hide": 0,
-        "description": "Type to filter visible instances by name."
       }
     ]
   },
@@ -160,11 +142,11 @@
                     },
                     {
                       "color": "#EAB839",
-                      "value": 50
+                      "value": 80
                     },
                     {
                       "color": "red",
-                      "value": 85
+                      "value": 90
                     }
                   ]
                 }
@@ -190,64 +172,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "avg_runnable"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Avg Runnable Tasks"
-              },
-              {
-                "id": "custom.width",
-                "value": 170
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "#EAB839",
-                      "value": 1
-                    },
-                    {
-                      "color": "red",
-                      "value": 2
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "worker_pct"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Workers % of max"
+                "value": "Active Workers %"
               },
               {
                 "id": "custom.width",
@@ -304,68 +234,20 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "grant_waiters"
+              "options": "threadpool_ws"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "Grant Waiters"
+                "value": "Thread Pool (avg waiting)"
               },
               {
                 "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "transparent",
-                      "value": null
-                    },
-                    {
-                      "color": "#EAB839",
-                      "value": 1
-                    },
-                    {
-                      "color": "red",
-                      "value": 5
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "resource_sem_ms_min"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Res Semaphore Wait (ms/min)"
-              },
-              {
-                "id": "custom.width",
-                "value": 180
+                "value": 190
               },
               {
                 "id": "decimals",
-                "value": 1
+                "value": 2
               },
               {
                 "id": "color",
@@ -384,11 +266,11 @@
                     },
                     {
                       "color": "#EAB839",
-                      "value": 10
+                      "value": 0.01
                     },
                     {
                       "color": "red",
-                      "value": 100
+                      "value": 0.1
                     }
                   ]
                 }
@@ -404,64 +286,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "io_pressure_ms_min"
+              "options": "resource_sem_ws"
             },
             "properties": [
               {
                 "id": "displayName",
-                "value": "IO Pressure (ms/min)"
-              },
-              {
-                "id": "custom.width",
-                "value": 180
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "#EAB839",
-                      "value": 50
-                    },
-                    {
-                      "color": "red",
-                      "value": 500
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "pagelatch_ms_min"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Page Contention (ms/min)"
+                "value": "Res Semaphore (avg waiting)"
               },
               {
                 "id": "custom.width",
@@ -469,7 +299,7 @@
               },
               {
                 "id": "decimals",
-                "value": 1
+                "value": 2
               },
               {
                 "id": "color",
@@ -488,11 +318,11 @@
                     },
                     {
                       "color": "#EAB839",
-                      "value": 10
+                      "value": 0.01
                     },
                     {
                       "color": "red",
-                      "value": 100
+                      "value": 0.1
                     }
                   ]
                 }
@@ -531,7 +361,7 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "transparent",
+                      "color": "green",
                       "value": null
                     },
                     {
@@ -540,7 +370,7 @@
                     },
                     {
                       "color": "red",
-                      "value": 10
+                      "value": 25
                     }
                   ]
                 }
@@ -583,16 +413,16 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "transparent",
+                      "color": "green",
                       "value": null
                     },
                     {
                       "color": "#EAB839",
-                      "value": 5
+                      "value": 10
                     },
                     {
                       "color": "red",
-                      "value": 30
+                      "value": 60
                     }
                   ]
                 }
@@ -696,54 +526,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "age_min"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Collection age (min)"
-              },
-              {
-                "id": "custom.width",
-                "value": 160
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "thresholds"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "#EAB839",
-                      "value": 3
-                    },
-                    {
-                      "color": "red",
-                      "value": 10
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "severity_score"
             },
             "properties": [
@@ -772,11 +554,11 @@
                     },
                     {
                       "color": "#EAB839",
-                      "value": 3
+                      "value": 1
                     },
                     {
                       "color": "red",
-                      "value": 6
+                      "value": 10
                     }
                   ]
                 }
@@ -812,7 +594,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nWITH\ncpu_stats AS (\n    /* Avg CPU % over the range. collect.cpu_utilization_stats is a point-in-time\n       gauge (total_cpu_utilization falls back to sqlserver_cpu_utilization pre-2017). */\n    SELECT avg_cpu_pct = ISNULL(AVG(ISNULL(cus.total_cpu_utilization, cus.sqlserver_cpu_utilization) * 1.0), 0)\n    FROM collect.cpu_utilization_stats AS cus\n    WHERE cus.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND cus.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nscheduler_stats AS (\n    /* Scheduler pressure: avg runnable queue depth and peak worker-thread saturation.\n       collect.cpu_scheduler_stats is a point-in-time gauge, no delta needed. */\n    SELECT\n        avg_runnable   = ISNULL(AVG(css.avg_runnable_tasks_count * 1.0), 0),\n        max_worker_pct = ISNULL(MAX(css.total_current_workers_count * 100.0 / NULLIF(css.max_workers_count, 0)), 0)\n    FROM collect.cpu_scheduler_stats AS css\n    WHERE css.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND css.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\ngrant_stats AS (\n    /* Peak memory grant waiters. collect.memory_grant_stats.waiter_count is a gauge. */\n    SELECT max_grant_waiters = ISNULL(MAX(mgs.waiter_count), 0)\n    FROM collect.memory_grant_stats AS mgs\n    WHERE mgs.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND mgs.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nwait_agg AS (\n    /* Per-minute wait time for the three wait families used as pressure signals.\n       collect.wait_stats is cumulative-since-restart; wait_time_ms_delta is the\n       correct per-interval column, summed and normalized by elapsed minutes in range. */\n    SELECT\n        resource_sem_ms_min = ISNULL(\n            SUM(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type = N'RESOURCE_SEMAPHORE' THEN ws.collection_time END)), 0), 0),\n        pageiolatch_ms_min  = ISNULL(\n            SUM(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type LIKE N'PAGEIOLATCH_%' THEN ws.collection_time END)), 0), 0),\n        pagelatch_ms_min    = ISNULL(\n            SUM(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.wait_time_ms_delta END) * 1.0\n            / NULLIF(DATEDIFF(MINUTE,\n                MIN(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.collection_time END),\n                MAX(CASE WHEN ws.wait_type LIKE N'PAGELATCH_%' THEN ws.collection_time END)), 0), 0)\n    FROM collect.wait_stats AS ws\n    WHERE ws.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND ws.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n      AND (ws.wait_type = N'RESOURCE_SEMAPHORE' OR ws.wait_type LIKE N'PAGEIOLATCH_%' OR ws.wait_type LIKE N'PAGELATCH_%')\n),\nfile_io AS (\n    /* Per-minute IO stall time. collect.file_io_stats is cumulative; io_stall_ms_delta\n       is the per-interval column, normalized by elapsed minutes like wait_agg above. */\n    SELECT io_stall_ms_min = ISNULL(\n        SUM(fio.io_stall_ms_delta) * 1.0\n        / NULLIF(DATEDIFF(MINUTE, MIN(fio.collection_time), MAX(fio.collection_time)), 0), 0)\n    FROM collect.file_io_stats AS fio\n    WHERE fio.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND fio.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nblocking_agg AS (\n    /* Blocking/deadlock counts. collect.blocking_deadlock_stats deadlock_count_delta\n       and blocking_event_count_delta are safe to SUM() directly here (not the\n       rolling-window raw columns, which double-count across rows). */\n    SELECT\n        blocking      = ISNULL(SUM(bds.blocking_event_count_delta), 0),\n        max_block_sec = ISNULL(MAX(bds.max_blocking_duration_ms_delta), 0) / 1000.0,\n        deadlocks     = ISNULL(SUM(bds.deadlock_count_delta), 0)\n    FROM collect.blocking_deadlock_stats AS bds\n    WHERE bds.collection_time >= DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeFrom())) AND bds.collection_time < DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(datetime2, $__timeTo()))\n),\nbase AS (\n    SELECT\n        server_name         = (SELECT TOP 1 si.server_name FROM config.server_info AS si),\n        cpu_pct             = cs.avg_cpu_pct,\n        avg_runnable        = ss.avg_runnable,\n        worker_pct          = ss.max_worker_pct,\n        grant_waiters       = gs.max_grant_waiters,\n        resource_sem_ms_min = wa.resource_sem_ms_min,\n        io_pressure_ms_min  = fi.io_stall_ms_min + wa.pageiolatch_ms_min,\n        pagelatch_ms_min    = wa.pagelatch_ms_min,\n        blocking            = ba.blocking,\n        max_block_sec       = ba.max_block_sec,\n        deadlocks           = ba.deadlocks,\n        /* config.collection_log is the same collector-health ledger perfmon-instance\n           and perfmon-collection read; a distinct collector erroring in the last 5\n           minutes counts as unhealthy regardless of the dashboard time range. */\n        unhealthy_cols      = (SELECT COUNT_BIG(DISTINCT cl.collector_name) FROM config.collection_log AS cl WHERE cl.collection_time >= DATEADD(MINUTE, -5, SYSDATETIME()) AND cl.collection_status = N'ERROR'),\n        age_min             = DATEDIFF(MINUTE, (SELECT MAX(cl.collection_time) FROM config.collection_log AS cl), SYSDATETIME())\n    FROM cpu_stats AS cs\n    CROSS JOIN scheduler_stats AS ss\n    CROSS JOIN grant_stats AS gs\n    CROSS JOIN wait_agg AS wa\n    CROSS JOIN file_io AS fi\n    CROSS JOIN blocking_agg AS ba\n),\nscored AS (\n    /* Composite severity score, our own weighting (no upstream equivalent): each\n       signal contributes 0-3 points at locally chosen thresholds, summed into one\n       sortable number used for both the Severity column and its cell thresholds below. */\n    SELECT *,\n        severity_score =\n            CASE WHEN cpu_pct > 85 THEN 3 WHEN cpu_pct > 50 THEN 1 ELSE 0 END\n          + CASE WHEN worker_pct > 90 THEN 3 WHEN worker_pct > 70 THEN 1 ELSE 0 END\n          + CASE WHEN grant_waiters > 5 THEN 3 WHEN grant_waiters > 1 THEN 1 ELSE 0 END\n          + CASE WHEN resource_sem_ms_min > 100 THEN 3 WHEN resource_sem_ms_min > 10 THEN 1 ELSE 0 END\n          + CASE WHEN io_pressure_ms_min > 500 THEN 3 WHEN io_pressure_ms_min > 50 THEN 1 ELSE 0 END\n          + CASE WHEN pagelatch_ms_min > 100 THEN 2 WHEN pagelatch_ms_min > 10 THEN 1 ELSE 0 END\n          + CASE WHEN avg_runnable > 20 THEN 2 WHEN avg_runnable > 5 THEN 1 ELSE 0 END\n          + CASE WHEN blocking > 25 THEN 2 WHEN blocking > 1 THEN 1 ELSE 0 END\n          + CASE WHEN deadlocks > 10 THEN 2 WHEN deadlocks > 1 THEN 1 ELSE 0 END\n    FROM base\n)\nSELECT * FROM scored\nWHERE (N${filter:sqlstring} = N'*' OR N${filter:sqlstring} = N'' OR server_name LIKE N'%' + N${filter:sqlstring} + N'%');\n"
+          "rawSql": "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nWITH\ncpu_stats AS (\n    /* Avg CPU % over the trailing window. */\n    SELECT avg_cpu_pct = ISNULL(AVG(ISNULL(cus.total_cpu_utilization, cus.sqlserver_cpu_utilization) * 1.0), 0)\n    FROM collect.cpu_utilization_stats AS cus\n    WHERE cus.sample_time >= DATEADD(MINUTE, -15, SYSDATETIME())\n),\nactive_workers AS (\n    /* Live snapshot, not time-windowed - collect.cpu_scheduler_stats only stores\n       current_workers_count (idle-inclusive) */\n    SELECT\n        max_worker_pct = ISNULL(SUM(dos.active_workers_count) * 100.0 / NULLIF(MAX(osi.max_workers_count), 0), 0)\n    FROM sys.dm_os_schedulers AS dos\n    CROSS JOIN sys.dm_os_sys_info AS osi\n    WHERE dos.status = N'VISIBLE ONLINE'\n),\nwait_agg AS (\n    /* wait_stats is cumulative-since-restart; wait_time_ms_delta is per-interval.\n       Wait families: poison-wait set only. */\n    SELECT\n        resource_sem_ms = ISNULL(SUM(CASE WHEN ws.wait_type IN (N'RESOURCE_SEMAPHORE', N'RESOURCE_SEMAPHORE_QUERY_COMPILE') THEN ws.wait_time_ms_delta END), 0),\n        threadpool_ms   = ISNULL(SUM(CASE WHEN ws.wait_type = N'THREADPOOL' THEN ws.wait_time_ms_delta END), 0),\n        elapsed_sec     = (SELECT CASE WHEN DATEDIFF(SECOND, MIN(w2.collection_time), MAX(w2.collection_time)) < 60 THEN 60\n                                       ELSE DATEDIFF(SECOND, MIN(w2.collection_time), MAX(w2.collection_time)) END\n                           FROM collect.wait_stats AS w2\n                           WHERE w2.collection_time >= DATEADD(MINUTE, -15, SYSDATETIME()))\n    FROM collect.wait_stats AS ws\n    WHERE ws.collection_time >= DATEADD(MINUTE, -15, SYSDATETIME())\n      AND ws.wait_type IN (N'RESOURCE_SEMAPHORE', N'RESOURCE_SEMAPHORE_QUERY_COMPILE', N'THREADPOOL')\n),\nblocking_agg AS (\n    /* blocking_event_count (raw+delta) double-counts, rolling window - count raw\n       events instead. deadlock_count is already per-interval, not cumulative -\n       SUM() raw, not delta. max_blocking_duration_ms: MAX() only. */\n    SELECT\n        blocking      = ISNULL(be.blocking_events, 0),\n        max_block_sec = ISNULL(dl.max_block_ms, 0) / 1000.0,\n        deadlocks     = ISNULL(dl.deadlocks, 0)\n    FROM (\n        SELECT\n            max_block_ms = MAX(bds.max_blocking_duration_ms),\n            deadlocks    = SUM(bds.deadlock_count)\n        FROM collect.blocking_deadlock_stats AS bds\n        WHERE bds.collection_time >= DATEADD(MINUTE, -15, SYSDATETIME())\n    ) AS dl\n    CROSS JOIN (\n        SELECT blocking_events = COUNT_BIG(*)\n        FROM collect.blocking_BlockedProcessReport AS bg\n        WHERE bg.collection_time >= DATEADD(MINUTE, -15, SYSDATETIME()) AND bg.event_time >= DATEADD(MINUTE, -15, SYSDATETIME())\n    ) AS be\n),\nbase AS (\n    SELECT\n        server_name         = (SELECT TOP 1 si.server_name FROM config.server_info AS si),\n        cpu_pct         = cs.avg_cpu_pct,\n        worker_pct      = aw.max_worker_pct,\n        resource_sem_ws = ISNULL(wa.resource_sem_ms / 1000.0 / wa.elapsed_sec, 0),\n        threadpool_ws   = ISNULL(wa.threadpool_ms / 1000.0 / wa.elapsed_sec, 0),\n        blocking        = ba.blocking,\n        max_block_sec   = ba.max_block_sec,\n        deadlocks       = ba.deadlocks,\n        /* config.collection_log uses its own shorter 5-min staleness window,\n           distinct from _FLEET_HEALTH_WINDOW_MINUTES above. */\n        unhealthy_cols  = (SELECT COUNT_BIG(DISTINCT cl.collector_name) FROM config.collection_log AS cl WHERE cl.collection_time >= DATEADD(MINUTE, -5, SYSDATETIME()) AND cl.collection_status = N'ERROR')\n    FROM cpu_stats AS cs\n    CROSS JOIN active_workers AS aw\n    CROSS JOIN wait_agg AS wa\n    CROSS JOIN blocking_agg AS ba\n),\ncats AS (\n    /* Per-category severity 0/1/2, worst signal per category. _ws = avg waiting\n       sessions. Collectors cap at warning, matching upstream's CollectorSeverity. */\n    SELECT *,\n        cpu_sev       = CASE WHEN cpu_pct > 90 THEN 2 WHEN cpu_pct > 80 THEN 1 ELSE 0 END,\n        threads_sev   = CASE WHEN worker_pct > 90 OR threadpool_ws > 0.1 THEN 2\n                              WHEN worker_pct > 70 OR threadpool_ws > 0.01 THEN 1 ELSE 0 END,\n        memory_sev    = CASE WHEN resource_sem_ws > 0.1 THEN 2 WHEN resource_sem_ws > 0.01 THEN 1 ELSE 0 END,\n        blocking_sev  = CASE WHEN blocking > 25 OR max_block_sec >= 60 THEN 2\n                              WHEN blocking > 1 OR max_block_sec >= 10 THEN 1 ELSE 0 END,\n        deadlock_sev  = CASE WHEN deadlocks >= 10 THEN 2 WHEN deadlocks >= 1 THEN 1 ELSE 0 END,\n        collector_sev = CASE WHEN unhealthy_cols >= 1 THEN 1 ELSE 0 END\n    FROM base\n),\nscored AS (\n    /* severity_score: worst-dominates rank (10/critical + 1/warning) so one\n       critical outranks any number of warnings. severity_level: worst category\n       level itself (2/1/0). */\n    SELECT *,\n        severity_score =\n            CASE cpu_sev       WHEN 2 THEN 10 ELSE cpu_sev       END\n          + CASE threads_sev   WHEN 2 THEN 10 ELSE threads_sev   END\n          + CASE memory_sev    WHEN 2 THEN 10 ELSE memory_sev    END\n          + CASE blocking_sev  WHEN 2 THEN 10 ELSE blocking_sev  END\n          + CASE deadlock_sev  WHEN 2 THEN 10 ELSE deadlock_sev  END\n          + CASE collector_sev WHEN 2 THEN 10 ELSE collector_sev END,\n        severity_level =\n            CASE WHEN cpu_sev = 2 OR threads_sev = 2 OR memory_sev = 2\n                   OR blocking_sev = 2 OR deadlock_sev = 2 THEN 2\n                 WHEN cpu_sev = 1 OR threads_sev = 1 OR memory_sev = 1\n                   OR blocking_sev = 1 OR deadlock_sev = 1\n                   OR collector_sev = 1 THEN 1\n                 ELSE 0 END\n    FROM cats\n)\nSELECT\n    server_name,\n    cpu_pct,\n    worker_pct,\n    threadpool_ws,\n    resource_sem_ws,\n    blocking,\n    max_block_sec,\n    deadlocks,\n    unhealthy_cols,\n    severity_score\nFROM scored;\n"
         }
       ]
     }

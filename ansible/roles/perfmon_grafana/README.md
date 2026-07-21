@@ -10,7 +10,13 @@ Provisions Grafana datasources, dashboards, and alert rules for PerformanceMonit
    Datasources are named `PerfMon-<inventory_hostname>` with UID `perfmon-ds-<inventory_hostname>`.
    The dashboard `$instance` variable filters on `/^PerfMon-/` and cross-dashboard links rely on the UIDs.
 3. Creates the `PerformanceMonitor` folder in Grafana (UID controlled by `grafana_folder_uid`),
-   then imports all dashboard JSON files from `files/grafana/dashboards/perfmon/` into it.
+   then imports all dashboard JSON files from `files/grafana/dashboards/perfmon/` into it. The
+   dynamic fleet dashboard is imported as a v1 file here like any other, then conditionally
+   replaced: when the target Grafana is >= 12.4 with the `dashboardNewLayouts` feature toggle
+   enabled, the role pushes a schema v2 variant (`fleet-overview-v2.json`) over the same
+   `perfmon-fleet` UID via the k8s-style dashboards API, which supports the conditional
+   rendering that hides filtered-out instances. Older/toggle-off Grafana keeps the v1 import.
+   `perfmon_fleet_static` skips this entirely - only the static (v1) fleet file is generated.
 4. Provisions Grafana Unified Alerting rule groups per SQL Server instance via the Grafana
    Provisioning API, scoped to that instance's datasource UID.
 5. Provisions contact points (email, Slack, PagerDuty, or webhook) via the Grafana Provisioning API
