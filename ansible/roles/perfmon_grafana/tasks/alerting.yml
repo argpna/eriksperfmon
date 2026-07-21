@@ -208,6 +208,7 @@
       - "{{ perfmon_alert_group_by }}"
   environment:
     GRAFANA_API_KEY: "{{ grafana_api_key }}"
+  when: perfmon_alert_contact_points | length > 0
   changed_when: false
   delegate_to: localhost
   no_log: true

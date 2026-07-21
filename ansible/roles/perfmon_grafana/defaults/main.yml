@@ -49,9 +49,10 @@ perfmon_alert_mute_timings: []
 # treats them as one receiver with multiple integrations.
 perfmon_alert_contact_points: []
 
-# Receiver the team=perfmon route targets. grafana-default-email always exists as a
-# Grafana built-in. Populate perfmon_alert_contact_points to use a custom receiver.
-perfmon_alert_receiver_name: grafana-default-email
+# Receiver the team=perfmon route targets. Matches the contact point name below so no
+# extra config is needed once perfmon_alert_contact_points is set. The route is only
+# provisioned when perfmon_alert_contact_points is non-empty - see alerting.yml.
+perfmon_alert_receiver_name: perfmon-alerts
 
 perfmon_alert_group_wait: 30s
 perfmon_alert_group_interval: 5m
