@@ -20,10 +20,12 @@ def _fleet_health_sql(identity_columns, final_select):
     return f"""
 WITH
 cpu_stats AS (
-    /* Avg CPU % over the trailing window. */
+    /* Avg CPU % over the trailing window. sample_time filter avoids blending in
+       stale backlog rows; collection_time guard bounds the clustered PK scan
+       since sample_time isn't indexed (sample_time <= collection_time always). */
     SELECT avg_cpu_pct = ISNULL(AVG(ISNULL(cus.total_cpu_utilization, cus.sqlserver_cpu_utilization) * 1.0), 0)
     FROM collect.cpu_utilization_stats AS cus
-    WHERE {_fleet_window('cus.sample_time')}
+    WHERE {_fleet_window('cus.collection_time')} AND {_fleet_window('cus.sample_time')}
 ),
 active_workers AS (
     /* Live snapshot, not time-windowed - collect.cpu_scheduler_stats only stores

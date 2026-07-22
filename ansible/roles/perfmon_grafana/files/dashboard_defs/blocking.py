@@ -459,8 +459,8 @@ SELECT TOP (100)
     d.waiter_waiting_to_close,
     d.client_option_1,
     d.client_option_2,
-    query = CONVERT(nvarchar(max), d.query),
-    object_names = CONVERT(nvarchar(max), d.object_names)
+    query = {strip_blitzlock_query_wrapper('CONVERT(nvarchar(max), d.query)')},
+    object_names = {strip_blitzlock_object_names_wrapper('CONVERT(nvarchar(max), d.object_names)')}
 FROM collect.deadlocks AS d
 WHERE $__timeFilter(d.collection_time)
 ORDER BY d.event_date DESC

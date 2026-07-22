@@ -464,11 +464,26 @@ def row(title: str, y: int, repeat: str | None = None) -> dict:
 
 def strip_whoisactive_wrapper(col_sql: str) -> str:
     """Strip sp_WhoIsActive's '<?query --' / '--?>' XML-comment wrapper from a
-    text column expression, so the raw SQL text displays without it."""
+    text column expression."""
     return (
         f"REPLACE(REPLACE({col_sql}, "
         "N'<?query --' + CHAR(13) + CHAR(10), N''), "
         "CHAR(13) + CHAR(10) + N'--?>', N'')"
+    )
+
+
+def strip_blitzlock_query_wrapper(col_sql: str) -> str:
+    """Strip sp_BlitzLock's '<?query ' / '?>' XML-PI wrapper from collect.deadlocks'
+    query column."""
+    return f"LTRIM(RTRIM(REPLACE(REPLACE({col_sql}, N'<?query', N''), N'?>', N'')))"
+
+
+def strip_blitzlock_object_names_wrapper(col_sql: str) -> str:
+    """Strip sp_BlitzLock's per-object '<object>'/'</object>' XML wrapper from
+    collect.deadlocks' object_names column."""
+    return (
+        f"LTRIM(RTRIM(REPLACE(REPLACE(REPLACE({col_sql}, "
+        "N'</object><object>', N', '), N'<object>', N''), N'</object>', N'')))"
     )
 
 
