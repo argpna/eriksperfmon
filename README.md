@@ -42,7 +42,7 @@ Grafana row maps to one upstream sub-tab so you can compare them side by side.
 | **Utilization** | CPU and memory utilization trends, provisioning efficiency, peak hours by day, health score |
 | **Application Connections** | Connection patterns by application and login over the last 24 hours |
 | **High Impact** | Queries with the highest cumulative CPU, I/O, or elapsed time across the collection window |
-| **Index Analysis** | Missing indexes, duplicate indexes, and contended indexes with impact estimates |
+| **Index Analysis** | Missing indexes, duplicate indexes, and contended indexes with impact estimates ([not runnable as a panel](#features-with-no-grafana-equivalent), shows manual run instructions instead) |
 | **Index Usage** | Per-index seek/scan/lookup/update counts; unused and write-only indexes flagged |
 | **Locking & Contention** | Lock waits, deadlock trends, and top contended objects |
 | **Database Resources** | Per-database CPU, I/O, memory, and log usage over the selected time range |
@@ -271,10 +271,15 @@ Use this path if you want PerformanceMonitor installed, datasources provisioned,
 deployed all from one command. Ansible handles everything including the `grafana_reader` login,
 datasource UIDs, and static fleet generation.
 
+> [!TIP]
+> These are plain, idempotent `ansible-playbook` invocations - point any automation runner
+> (AWX/Tower, Jenkins, Rundeck, GitHub Actions, etc.) at the same command for a one-click run
+> instead of running it by hand.
+
 ### Prerequisites
 
 - Ansible control node (runs on Linux only)
-- `sqlcmd` installed on the Ansible control node
+- `sqlcmd` (mssql-tools18) installed on the Ansible control node
 - SQL Server instances with SQL Agent enabled (Windows or Linux)
 - Grafana instance (self-hosted or cloud; the API must be reachable from the Ansible control node)
 - `grafana_api_key`: a Grafana service account token with Admin role. Set via vault or group vars.
@@ -287,7 +292,8 @@ ansible-galaxy collection install -r ansible/requirements.yml
 
 ### Step 1: Edit the inventory
 
-Add your SQL Server instances to [ansible/inventory/hosts.yml](ansible/inventory/hosts.yml).
+Add your SQL Server instances to your inventory. For example, see -
+[ansible/inventory/hosts.yml](ansible/inventory/hosts.yml).
 
 If you are starting fresh, define hosts directly under `sql_servers`:
 
@@ -320,15 +326,19 @@ sql_servers:
 The roles target the `sql_servers` group; any host reachable through it (directly or via
 `children`) will be included.
 
-Set credentials in
-[ansible/inventory/group_vars/sql_servers.yml](ansible/inventory/group_vars/sql_servers.yml)
-or an Ansible Vault file. The required variables are `perfmon_admin_sql_password` and
-`perfmon_reader_password`.
+Set credentials in your group vars (see example:
+[ansible/inventory/group_vars/sql_servers.yml](ansible/inventory/group_vars/sql_servers.yml))
+or an Ansible Vault file. `perfmon_admin_sql_password` and `perfmon_reader_password` are required
+for the default `sql` auth mode; `perfmon_admin_auth_mode`/`perfmon_reader_auth_mode: windows`
+need a different set of variables instead - see the
+[perfmon_install](ansible/roles/perfmon_install/README.md) and
+[perfmon_grafana](ansible/roles/perfmon_grafana/README.md) role docs for the full list.
 
 ### Step 2: Deploy
 
 ```bash
 # Install PerformanceMonitor, provision Grafana datasources, dashboards and alerts
+# Note: Replace inventory and playbook paths as needed
 ansible-playbook -i ansible/inventory ansible/playbooks/main.yml
 ```
 
@@ -343,13 +353,14 @@ What this does:
 
 - Downloads the pinned PerformanceMonitor release and runs all install scripts via `sqlcmd`
 - Installs community tools: sp_WhoIsActive, DarlingData, First Responder Kit
-- Creates the `grafana_reader` login with SELECT on the `collect`, `report`, and `config` schemas and `VIEW SERVER STATE`
+- Creates the `grafana_reader` login with `SELECT` on the PerformanceMonitor schemas (`collect`,
+  `report`, and `config`), and optionally `VIEW SERVER STATE`, `CONNECT ANY DATABASE`,
+  `VIEW ANY DEFINITION`, and `SQLAgentReaderRole` in `msdb` for additional dashboard/alert coverage.
 - Provisions Grafana datasources named `PerfMon-<hostname>` with UIDs `perfmon-ds-<hostname>`
 - Generates and imports a static fleet dashboard with all inventory instances sorted by severity
 - Provisions Grafana alert rules per instance (see [Alerting](#alerting))
-- All steps are safe to re-run.
 
-To add an instance later: add it to `hosts.yml` and re-run `main.yml`.
+All steps are safe to re-run. To add an instance later: add it to `hosts.yml` and re-run `main.yml`.
 
 To upgrade PerformanceMonitor: see [Upgrading](#upgrading).
 
@@ -404,9 +415,9 @@ To stop: `docker compose down`. Add `-v` to also delete data volumes.
 
 ## Upgrading PerformanceMonitor
 
-1. Bump `perfmon_version` in
-   [ansible/roles/perfmon_install/defaults/main.yml](ansible/roles/perfmon_install/defaults/main.yml)
-   and re-run the install playbook. All scripts are safe to re-run.
+1. Backup the `PerformanceMonitor` database, then bump `perfmon_version` in
+   [defaults](ansible/roles/perfmon_install/defaults/main.yml) or `group_vars` and re-run the
+   install playbook. All scripts are safe to re-run.
 
 2. With the stack running, smoke-test every panel query:
 
@@ -434,6 +445,14 @@ To stop: `docker compose down`. Add `-v` to also delete data volumes.
    git -C ../PerformanceMonitor diff <old-tag> <new-tag> -- install/ # new views or table columns
    git -C ../PerformanceMonitor diff <old-tag> <new-tag> -- Dashboard/schema/tables.json # new collect.* columns
    ```
+
+> [!WARNING]
+> Pin `perfmon_version` in `defaults/main.yml` or `group_vars`, not as a one-off `--extra-vars`
+> override. `--extra-vars` has the highest precedence in Ansible, so if you use it to install a
+> version once and then omit it on a later run, the playbook falls back to the lower value still
+> sitting in `defaults/main.yml` or `group_vars` - which the role reads as a downgrade request
+> against the version already installed, and fails with "downgrade not supported" error.
+
 ---
 
 ## How it works
@@ -458,16 +477,15 @@ etc.) into its `collect.*` table.
 Two properties make the schema easy to query in Grafana:
 
 - **Pre-computed deltas.** Cumulative DMV counters are stored with `*_delta` columns - the
-  increment since the previous sample, restart-aware. Panels plot deltas directly, no `LAG()` or
-  rate math needed in Grafana.
+  increment since the previous sample, restart-aware.
 - **Analysis lives in `report.*` views.** Contention recommendations, health classification, top-N
   rankings, config-change diffs, and critical issue detection are all implemented in SQL views
   maintained by Erik upstream. Panel SQL stays thin and inherits improvements automatically when
   the upstream version is bumped.
 
 The following community tools are required for specific collectors to produce data:
-sp_WhoIsActive, DarlingData scripts, and First Responder Kit. Without them, the collectors that depend on these procedures
-error silently and leave their tables empty. The Ansible role installs all three automatically.
+sp_WhoIsActive, DarlingData scripts, and First Responder Kit. Without them, the collectors that depend
+on these procedures error silently and leave their tables empty. The Ansible role installs all three automatically.
 
 ### Dashboard generation
 
@@ -699,7 +717,8 @@ The following capabilities from Erik's C# WPF dashboard cannot be replicated in 
 | **MCP server** | The upstream project exposes several monitoring tools to LLM-based editors. This project does not include an MCP service. Grafana's own mcp-grafana project provides MCP access to Grafana itself, but a separate service querying `report.*` views directly would be needed to expose the monitoring data. |
 | **Side-by-side query comparison** | Compare a query's performance across two separate time ranges. Not currently supported. |
 | **Correlated timeline lanes** | Multi-metric synchronized timeline with relationship highlighting. Grafana's synchronized tooltips are a partial substitute. |
-| **FinOps cost attribution** | The upstream stores a user-supplied monthly server cost per connection and uses it to compute proportional cost shares by storage, CPU, and wait time across the FinOps tabs. Grafana has no per-datasource config store for this value, so these columns are omitted. |
+| **FinOps cost attribution** | The upstream stores a user-supplied monthly server cost per connection in a persisted config table and uses it to compute proportional cost shares by storage, CPU, and wait time across the FinOps tabs. Grafana has no equivalent config store - each of the three FinOps dashboards that need it exposes its own `monthly_cost` variable instead, entered separately per dashboard and not persisted server-side. |
+| **Index Analysis** | `sp_IndexCleanup` returns two result sets; the MSSQL datasource plugin only surfaces the first, so it can't be rendered as a live panel. The dashboard shows instructions to run the procedure manually (or use the upstream desktop application) instead. |
 
 > [!CAUTION]
 > **Monitoring blindspot under severe worker exhaustion**
