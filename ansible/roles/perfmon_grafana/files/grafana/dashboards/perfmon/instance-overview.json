@@ -1347,7 +1347,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\nSELECT ds.sort_order, ds.metric_name, metric_value = CONVERT(nvarchar(500), ds.metric_value) FROM report.daily_summary_v2 AS ds ORDER BY ds.sort_order;"
+          "rawSql": "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;\n\nSELECT\n    ds.sort_order,\n    ds.metric_name,\n    metric_value = CASE\n        /* worst_query_hash is a varbinary(8) boxed in sql_variant; a plain CONVERT to\n           nvarchar reinterprets the raw bytes as UTF-16 and renders garbage. */\n        WHEN SQL_VARIANT_PROPERTY(ds.metric_value, 'BaseType') IN ('binary', 'varbinary')\n            THEN CONVERT(nvarchar(500), CONVERT(varbinary(8), ds.metric_value), 1)\n        ELSE CONVERT(nvarchar(500), ds.metric_value)\n    END\nFROM report.daily_summary_v2 AS ds\nORDER BY ds.sort_order;\n"
         }
       ]
     },

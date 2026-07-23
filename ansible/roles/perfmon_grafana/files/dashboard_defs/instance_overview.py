@@ -314,7 +314,20 @@ FROM report.scheduler_cpu_analysis AS sca;
                 partial(
                     table,
                     "Daily summary",
-                    sql="SELECT ds.sort_order, ds.metric_name, metric_value = CONVERT(nvarchar(500), ds.metric_value) FROM report.daily_summary_v2 AS ds ORDER BY ds.sort_order;",
+                    sql="""
+SELECT
+    ds.sort_order,
+    ds.metric_name,
+    metric_value = CASE
+        /* worst_query_hash is a varbinary(8) boxed in sql_variant; a plain CONVERT to
+           nvarchar reinterprets the raw bytes as UTF-16 and renders garbage. */
+        WHEN SQL_VARIANT_PROPERTY(ds.metric_value, 'BaseType') IN ('binary', 'varbinary')
+            THEN CONVERT(nvarchar(500), CONVERT(varbinary(8), ds.metric_value), 1)
+        ELSE CONVERT(nvarchar(500), ds.metric_value)
+    END
+FROM report.daily_summary_v2 AS ds
+ORDER BY ds.sort_order;
+""",
                 ),
             ),
         ],
