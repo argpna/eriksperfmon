@@ -179,25 +179,25 @@ Use the role directly in a playbook:
 Or run the included playbook directly:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/install_performance_monitor.yml
 ```
 
 Install on a single host:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml --limit sql01
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/install_performance_monitor.yml --limit sql01
 ```
 
 Uninstall from all hosts:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml -e perfmon_state=absent
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/install_performance_monitor.yml -e perfmon_state=absent
 ```
 
 Force re-run of install scripts even when already at the target version:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml -e perfmon_force_reinstall=true
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/install_performance_monitor.yml -e perfmon_force_reinstall=true
 ```
 
 ### Inventory

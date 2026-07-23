@@ -339,14 +339,14 @@ need a different set of variables instead - see the
 ```bash
 # Install PerformanceMonitor, provision Grafana datasources, dashboards and alerts
 # Note: Replace inventory and playbook paths as needed
-ansible-playbook -i ansible/inventory ansible/playbooks/main.yml
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/main.yml
 ```
 
 Or run steps separately:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/install_performance_monitor.yml # SQL Server only
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml # Grafana only
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/install_performance_monitor.yml # SQL Server only
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml # Grafana only
 ```
 
 What this does:
@@ -431,7 +431,7 @@ To stop: `docker compose down`. Add `-v` to also delete data volumes.
    regenerate and reimport:
 
    ```bash
-   ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags dashboards
+   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags dashboards
    ```
 
    Column changes can come from any install script that creates or alters a view or table -
@@ -446,12 +446,12 @@ To stop: `docker compose down`. Add `-v` to also delete data volumes.
    git -C ../PerformanceMonitor diff <old-tag> <new-tag> -- Dashboard/schema/tables.json # new collect.* columns
    ```
 
-> [!WARNING]
+> [!CAUTION]
 > Pin `perfmon_version` in `defaults/main.yml` or `group_vars`, not as a one-off `--extra-vars`
-> override. `--extra-vars` has the highest precedence in Ansible, so if you use it to install a
-> version once and then omit it on a later run, the playbook falls back to the lower value still
-> sitting in `defaults/main.yml` or `group_vars` - which the role reads as a downgrade request
-> against the version already installed, and fails with "downgrade not supported" error.
+> override. Extra vars has the highest variable precedence in Ansible, so if you use it to
+> override-install a version once and then omit it on a later run, the playbook falls back to the lower
+> value still sitting in `defaults/main.yml` or `group_vars` - which the role interprets as a downgrade
+> request against the version already installed, and fails with "downgrade not supported" error.
 
 ---
 
@@ -494,7 +494,7 @@ is `ansible/roles/perfmon_grafana/files/build-dashboards.py`. Every panel, query
 row, link, and threshold is defined in Python and serialized to JSON when you run the builder:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags generate
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags generate
 ```
 
 The JSON files are committed to the repository so Grafana can load them without running the
@@ -538,13 +538,9 @@ automatically on the next dashboard refresh with no dashboard changes required. 
 ordering: Grafana's panel-repeat mechanism is alphabetical and cannot be reordered by a computed
 metric value such as severity score.
 
-The schema-v2 variant (`fleet-overview-v2.json`) renders each instance as a health card
-and adds a severity filter: instances outside the selected severity levels are hidden via
-conditional rendering. Only a successful zero-row result hides a card - an instance whose
-query errors (unreachable host, bad credentials) stays visible with its error, so a down
-instance cannot silently disappear from the fleet view. The
-Ansible role imports the v2 variant when the target Grafana supports it (version >= 12.4 and the
-`dashboardNewLayouts` feature toggle, probed via `/api/frontend/settings`) and falls back to the
+The schema-v2 variant (`fleet-overview-v2.json`) renders each instance as a health card and adds a
+severity filter: instances outside the selected severity levels are hidden via conditional rendering.
+The Ansible role imports the v2 variant when the target Grafana supports it (version >= 12.4 and the `dashboardNewLayouts` feature toggle, probed via `/api/frontend/settings`) and falls back to the
 v1 file otherwise; both share the `perfmon-fleet` UID so navigation links work in either case.
 The gate is version-based because older Grafana accepts and stores the v2 resource but evaluates
 the show/hide rule for all repeated copies together.
