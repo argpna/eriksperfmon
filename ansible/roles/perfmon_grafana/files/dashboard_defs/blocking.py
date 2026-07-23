@@ -424,7 +424,7 @@ SELECT TOP (100)
     event_date = {tz_col('d.event_date')},
     collection_time = {tz_col('d.collection_time')},
     d.database_name,
-    d.ServerName,
+    server_name = d.ServerName,
     d.deadlock_type,
     d.spid,
     d.deadlock_group,

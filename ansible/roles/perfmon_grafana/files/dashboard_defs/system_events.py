@@ -58,20 +58,20 @@ SELECT TOP (200)
     collection_time = {tz_col('sh.collection_time')},
     event_time = {tz_col('sh.event_time')},
     sh.state,
-    sh.BadPagesDetected,
-    sh.BadPagesFixed,
-    sh.isAccessViolationOccurred,
-    sh.writeAccessViolationCount,
-    sh.totalDumpRequests,
-    sh.intervalDumpRequests,
-    sh.spinlockBackoffs,
-    sh.sickSpinlockType,
-    sh.sickSpinlockTypeAfterAv,
-    sh.latchWarnings,
-    sh.nonYieldingTasksReported,
-    sh.pageFaults,
-    sh.systemCpuUtilization,
-    sh.sqlCpuUtilization
+    bad_pages_detected = sh.BadPagesDetected,
+    bad_pages_fixed = sh.BadPagesFixed,
+    is_access_violation_occurred = sh.isAccessViolationOccurred,
+    write_access_violation_count = sh.writeAccessViolationCount,
+    total_dump_requests = sh.totalDumpRequests,
+    interval_dump_requests = sh.intervalDumpRequests,
+    spinlock_backoffs = sh.spinlockBackoffs,
+    sick_spinlock_type = sh.sickSpinlockType,
+    sick_spinlock_type_after_av = sh.sickSpinlockTypeAfterAv,
+    latch_warnings = sh.latchWarnings,
+    non_yielding_tasks_reported = sh.nonYieldingTasksReported,
+    page_faults = sh.pageFaults,
+    system_cpu_utilization = sh.systemCpuUtilization,
+    sql_cpu_utilization = sh.sqlCpuUtilization
 FROM collect.HealthParser_SystemHealth AS sh
 WHERE $__timeFilter(sh.collection_time)
 ORDER BY sh.collection_time DESC;
@@ -242,11 +242,11 @@ SELECT TOP (100)
     collection_time = {tz_col('io.collection_time')},
     event_time = {tz_col('io.event_time')},
     io.state,
-    io.ioLatchTimeouts,
-    io.intervalLongIos,
-    io.totalLongIos,
-    io.longestPendingRequests_duration_ms,
-    io.longestPendingRequests_filePath
+    io_latch_timeouts = io.ioLatchTimeouts,
+    interval_long_ios = io.intervalLongIos,
+    total_long_ios = io.totalLongIos,
+    longest_pending_request_duration_ms = io.longestPendingRequests_duration_ms,
+    longest_pending_request_file_path = io.longestPendingRequests_filePath
 FROM collect.HealthParser_IOIssues AS io
 WHERE $__timeFilter(io.collection_time)
 ORDER BY io.collection_time DESC;
@@ -395,10 +395,10 @@ SELECT TOP (100)
     mc.id,
     collection_time = {tz_col('mc.collection_time')},
     event_time = {tz_col('mc.event_time')},
-    mc.lastNotification,
-    mc.outOfMemoryExceptions,
-    mc.isAnyPoolOutOfMemory,
-    mc.processOutOfMemoryPeriod,
+    last_notification = mc.lastNotification,
+    out_of_memory_exceptions = mc.outOfMemoryExceptions,
+    is_any_pool_out_of_memory = mc.isAnyPoolOutOfMemory,
+    process_out_of_memory_period = mc.processOutOfMemoryPeriod,
     mc.name,
     mc.available_physical_memory_gb,
     mc.available_virtual_memory_gb,
@@ -516,15 +516,15 @@ SELECT TOP (200)
     collection_time = {tz_col('ct.collection_time')},
     event_time = {tz_col('ct.event_time')},
     ct.state,
-    ct.maxWorkers,
-    ct.workersCreated,
-    ct.workersIdle,
-    ct.tasksCompletedWithinInterval,
-    ct.pendingTasks,
-    ct.oldestPendingTaskWaitingTime,
-    ct.hasUnresolvableDeadlockOccurred,
-    ct.hasDeadlockedSchedulersOccurred,
-    ct.didBlockingOccur
+    max_workers = ct.maxWorkers,
+    workers_created = ct.workersCreated,
+    workers_idle = ct.workersIdle,
+    tasks_completed_within_interval = ct.tasksCompletedWithinInterval,
+    pending_tasks = ct.pendingTasks,
+    oldest_pending_task_waiting_time = ct.oldestPendingTaskWaitingTime,
+    has_unresolvable_deadlock_occurred = ct.hasUnresolvableDeadlockOccurred,
+    has_deadlocked_schedulers_occurred = ct.hasDeadlockedSchedulersOccurred,
+    did_blocking_occur = ct.didBlockingOccur
 FROM collect.HealthParser_CPUTasks AS ct
 WHERE $__timeFilter(ct.collection_time)
 ORDER BY ct.collection_time DESC;

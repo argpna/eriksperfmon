@@ -35,7 +35,7 @@ OR EXISTS (
 SELECT
     event_date = {tz_col('d.event_date')},
     d.database_name,
-    d.ServerName,
+    server_name = d.ServerName,
     d.deadlock_type,
     d.spid,
     d.deadlock_group,
