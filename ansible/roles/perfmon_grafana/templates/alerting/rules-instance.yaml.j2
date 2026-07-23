@@ -670,3 +670,99 @@ groups:
           summary: >
             The PerformanceMonitor - Collection job on {{ item.inventory_hostname }} has failed
             within the last {{ perfmon_alert_failed_job_lookback_min }} minutes.
+
+  # -----------------------------------------------------------------------
+  # Collection Stopped
+  # Upstream: GetCollectionStoppedAsync / DecideCollectionStopped
+  # Fires when the PerformanceMonitor collector Agent job(s) are disabled, or when no
+  # collector has logged a run within the freshness window. Disabled jobs win over the
+  # freshness check.
+  # Source: DatabaseService.NocHealth.cs GetCollectionStoppedAsync
+  # Access: msdb.dbo.sysjobs_view (requires SQLAgentReaderRole, same grant as Failed Collector Job)
+  # -----------------------------------------------------------------------
+  - orgId: 1
+    name: "PerfMon - Collection Stopped"
+    folder: "{{ grafana_folder }}"
+    interval: 1m
+    rules:
+      - uid: "perfmon-collection-stopped-{{ item.inventory_hostname }}"
+        title: "Collection Stopped - {{ item.inventory_hostname }}"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: "{{ perfmon_ds_uid_prefix }}-{{ item.inventory_hostname }}"
+            model:
+              datasource:
+                type: mssql
+                uid: "{{ perfmon_ds_uid_prefix }}-{{ item.inventory_hostname }}"
+              format: table
+              rawQuery: true
+              rawSql: |
+                SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+                DECLARE @total_jobs int = 0;
+                DECLARE @disabled_jobs int = 0;
+                DECLARE @minutes_since int;
+                BEGIN TRY
+                    /* SQLAgentReaderRole grants SELECT on sysjobs_view, not the sysjobs base
+                       table (VIEW DEFINITION only there) */
+                    SELECT
+                        @total_jobs = COUNT_BIG(*),
+                        @disabled_jobs = SUM(CASE WHEN sj.enabled = 0 THEN 1 ELSE 0 END)
+                    FROM msdb.dbo.sysjobs_view AS sj
+                    WHERE sj.name LIKE N'PerformanceMonitor%'
+                    OPTION(RECOMPILE);
+                END TRY
+                BEGIN CATCH
+                    /* Restricted msdb (e.g. AWS RDS) or no SQLAgentReaderRole - fall through to
+                       the freshness check rather than falsely reporting jobs disabled. */
+                    SET @total_jobs = 0;
+                    SET @disabled_jobs = 0;
+                END CATCH;
+                SELECT @minutes_since = DATEDIFF(MINUTE, MAX(collection_time), SYSDATETIME())
+                FROM config.collection_log
+                OPTION(RECOMPILE);
+                SELECT
+                    collection_stopped =
+                        CASE
+                            WHEN @total_jobs > 0 AND @disabled_jobs > 0 THEN 1
+                            WHEN @minutes_since >= {{ perfmon_alert_collection_stale_min | int }} THEN 1
+                            ELSE 0
+                        END;
+              refId: A
+          - refId: C
+            datasourceUid: "-100"
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 1
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: "-100"
+              expression: A
+              refId: C
+              type: threshold
+        noDataState: OK
+        execErrState: Error
+        for: 1m
+        labels:
+          team: perfmon
+          instance: "{{ item.inventory_hostname }}"
+        annotations:
+          summary: >
+            Data collection on {{ item.inventory_hostname }} appears to have stopped: either the
+            PerformanceMonitor collector Agent job(s) are disabled, or no collector has logged a
+            run within the last {{ perfmon_alert_collection_stale_min }} minutes.

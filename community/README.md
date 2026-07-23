@@ -16,4 +16,4 @@ bash scripts/fetch-perfmon-release.sh [perfmon_version]
 ```
 
 Expected files: `sp_WhoIsActive.sql`, `DarlingData.sql`, `Install-All-Scripts.sql`,
-`perfmon-<perfmon_version>.zip` (e.g. `perfmon-v3.0.0.zip`)
+`perfmon-<perfmon_version>.zip` (e.g. `perfmon-v3.x.x.zip`)

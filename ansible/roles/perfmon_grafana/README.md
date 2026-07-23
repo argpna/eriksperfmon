@@ -188,6 +188,7 @@ All thresholds default to the values from the upstream `UserPreferences.cs`. Ove
 | `perfmon_alert_poison_wait_floor_ms` | `500` | Poison Wait - fires when avg ms per wait event for `THREADPOOL`, `RESOURCE_SEMAPHORE`, or `RESOURCE_SEMAPHORE_QUERY_COMPILE` >= this value |
 | `perfmon_alert_long_running_job_multiplier` | `3` | Long-Running Collector Job - fires when the PerformanceMonitor - Collection job's current duration >= this multiple of its average |
 | `perfmon_alert_failed_job_lookback_min` | `60` | Failed Collector Job - how far back to look for failed PerformanceMonitor - Collection runs |
+| `perfmon_alert_collection_stale_min` | `30` | Collection Stopped - fires when no collector has logged a run in this many minutes (disabled collector Agent jobs fire immediately regardless of this value) |
 
 ### Alert routing variables
 

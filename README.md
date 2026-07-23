@@ -586,7 +586,7 @@ each SQL Server inventory host:
 
 1. Downloads the pinned release zip from Erik's GitHub (version in
    `roles/perfmon_install/defaults/main.yml` as `perfmon_version`)
-2. Runs install scripts 01-54 via `sqlcmd` from the Ansible control node over TCP.
+2. Runs the numbered install scripts, in order, via `sqlcmd` from the Ansible control node over TCP.
 3. Installs sp_WhoIsActive, DarlingData scripts, and First Responder Kit
 4. Creates `grafana_reader` with SELECT on the `collect`, `report`, and `config` schemas and `VIEW SERVER STATE`
 
@@ -650,6 +650,7 @@ notifications from Erik's upstream notification engine. Rules evaluate every min
 | Poison Wait | avg ms per wait event >= 500 ms for `THREADPOOL`, `RESOURCE_SEMAPHORE`, or `RESOURCE_SEMAPHORE_QUERY_COMPILE` |
 | Long-Running Collector Job | current run >= 3x average duration (jobs with avg < 60 s excluded) |
 | Failed Collector Job | most recent overall run of the collection job was a failure |
+| Collection Stopped | Collector Agent job is disabled, or no collector has logged a run in 30 minutes |
 
 All thresholds are Ansible variables defined in `roles/perfmon_grafana/defaults/main.yml`. Override
 per-host in `host_vars/` or per-group in `group_vars/`.

@@ -838,10 +838,13 @@ WITH ranked AS (
         force_failure_count   = SUM(qsd.force_failure_count),
         last_force_failure_reason_desc = MAX(qsd.last_force_failure_reason_desc),
         plan_forcing_type     = MAX(qsd.plan_forcing_type),
+        avg_clr_time_ms       = CONVERT(decimal(19,2), SUM(CONVERT(float, qsd.avg_clr_time) * qsd.count_executions) / 1000.0 / NULLIF(SUM(qsd.count_executions), 0)),
         min_clr_time_ms       = CONVERT(decimal(19,2), MIN(qsd.min_clr_time) / 1000.0),
         max_clr_time_ms       = CONVERT(decimal(19,2), MAX(qsd.max_clr_time) / 1000.0),
+        avg_num_physical_io_reads = SUM(CONVERT(float, qsd.avg_num_physical_io_reads) * qsd.count_executions) / NULLIF(SUM(qsd.count_executions), 0),
         min_num_physical_io_reads = MIN(qsd.min_num_physical_io_reads),
         max_num_physical_io_reads = MAX(qsd.max_num_physical_io_reads),
+        avg_log_bytes_used    = SUM(CONVERT(float, qsd.avg_log_bytes_used) * qsd.count_executions) / NULLIF(SUM(qsd.count_executions), 0),
         min_log_bytes_used    = MIN(qsd.min_log_bytes_used),
         max_log_bytes_used    = MAX(qsd.max_log_bytes_used)
     FROM collect.query_store_data AS qsd

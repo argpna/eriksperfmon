@@ -47,7 +47,7 @@ instructions if it cannot be found.
 | Variable | Default | Notes |
 |---|---|---|
 | `perfmon_state` | `present` | `present` installs or upgrades; `absent` runs the upstream uninstall script. |
-| `perfmon_version` | `v3.0.0` | Release tag to install or upgrade to. Single source of truth - bump to upgrade. |
+| `perfmon_version` | `v3.2.0` | Release tag to install or upgrade to. Single source of truth - bump to upgrade. |
 | `perfmon_force_reinstall` | `false` | Set to `true` to re-run all install scripts even when `installation_history` shows the instance is already at the target version. |
 | `mssql_port` | _(unset)_ | TCP port. When set, always used in the connection string: `host,port` or `host\instance,port`. Omit only for named instances where SQL Browser is the only option. |
 | `mssql_instance` | `MSSQLSERVER` | Instance name. `MSSQLSERVER` for the default instance, or a named instance. Named instances without a port fall back to `host\instance` (SQL Browser). |
@@ -170,7 +170,7 @@ Use the role directly in a playbook:
   roles:
     - role: perfmon_install
       vars:
-        perfmon_version: v3.0.0
+        perfmon_version: v3.2.0
         mssql_port: 1433
         perfmon_admin_sql_password: "{{ vault_sa_password }}"
         perfmon_reader_password: "{{ vault_reader_password }}"

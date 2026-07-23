@@ -109,8 +109,8 @@ symbol; minimum 8 characters).
 ## SQL Server version notes
 
 Both instances use `mssql-tools18` at `/opt/mssql-tools18/bin/sqlcmd` and connect with TLS
-using `tlsSkipVerify`. The Ansible role runs Erik's install scripts (01-54) against both
-instances.
+using `tlsSkipVerify`. The Ansible role runs Erik's numbered install scripts, in order,
+against both instances.
 
 ## Workload generator
 

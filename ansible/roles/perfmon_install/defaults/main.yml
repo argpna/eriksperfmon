@@ -1,5 +1,5 @@
 ---
-perfmon_version: "v3.0.0"
+perfmon_version: "v3.2.0"
 perfmon_state: present
 perfmon_force_reinstall: false
 

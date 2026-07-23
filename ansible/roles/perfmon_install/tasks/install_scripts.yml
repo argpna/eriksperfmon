@@ -1,5 +1,5 @@
 ---
-# Run PerformanceMonitor install scripts 01-54 in order against the target instance.
+# Run PerformanceMonitor's numbered install scripts, in order, against the target instance.
 # 00 (uninstall), 97(test procedures) and 99 (troubleshooting) are skipped here.
 # Install scripts are idempotent. Corresponding tasks report "changed" on every run;
 # that is expected.

@@ -262,14 +262,10 @@ ORDER BY wt.collection_time DESC, wt.wait_duration_ms DESC;
 
     # Upstream sub-tab: Blocking
     # Upstream ref: GetBlockingEventsAsync (DatabaseService.QueryPerformance.Blocking.cs).
-    # Deviation: blocking_spid/blocking_last_tran_started exist on our pinned
-    # perfmon_version (v3.0.0) and are added below. Two further upstream fields are
-    # NOT available at this pin and are intentionally omitted rather than breaking
-    # every install: `monitor_loop` (column added in v3.1.0) and the
-    # collect.dmv_blocking_snapshots fallback merge (table added in v3.1.0) that
-    # GetBlockingEventsAsync appends so the grid stays populated when the
-    # blocked-process-report XE captures nothing. Revisit both when perfmon_version
-    # is bumped past v3.1.0.
+    # Deviation: upstream also merges in the always-on collect.dmv_blocking_snapshots fallback
+    # (AppendDmvBlockingGridItemsAsync) for when the blocked-process-report XE never fires.
+    # Deferred: table/view exist, but it's a coarse DMV poll that adds dedup complexity
+    # for little payoff until there's a BPR-blind target to validate against. Revisit then.
     blocked_process_reports_sql = f"""
 SELECT TOP (100)
     event_time = {tz_col('bpr.event_time')},
@@ -282,6 +278,8 @@ SELECT TOP (100)
     blocked_spid = bpr.spid,
     bpr.ecid,
     bpr.blocking_spid,
+    bpr.blocking_ecid,
+    bpr.monitor_loop,
     blocking_last_tran_started = {tz_col('bpr.blocking_last_tran_started')},
     wait_seconds = bpr.wait_time_ms / 1000.0,
     bpr.status,
