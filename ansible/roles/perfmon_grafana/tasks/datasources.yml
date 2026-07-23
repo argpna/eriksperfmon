@@ -94,6 +94,7 @@
       Authorization: "Bearer {{ grafana_api_key }}"
     status_code: [200]
   register: _all_datasources
+  when: perfmon_prune_orphaned | bool
   delegate_to: localhost
   no_log: true
 
@@ -115,6 +116,7 @@
        | difference(_expected_uids) }}
   loop_control:
     label: "{{ item }}"
+  when: perfmon_prune_orphaned | bool
   changed_when: false
   delegate_to: localhost
   no_log: true

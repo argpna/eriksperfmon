@@ -9,6 +9,8 @@ Provisions Grafana datasources, dashboards, and alert rules for PerformanceMonit
 2. Creates or updates one MSSQL datasource per host in the `sql_servers` inventory group.
    Datasources are named `PerfMon-<inventory_hostname>` with UID `perfmon-ds-<inventory_hostname>`.
    The dashboard `$instance` variable filters on `/^PerfMon-/` and cross-dashboard links rely on the UIDs.
+   Datasources for instances outside the current run stay untouched unless `perfmon_prune_orphaned`
+   is set.
 3. Creates the `PerformanceMonitor` folder in Grafana (UID controlled by `grafana_folder_uid`),
    then imports all dashboard JSON files from `files/grafana/dashboards/perfmon/` into it. The
    dynamic fleet dashboard is imported as a v1 file here like any other, then conditionally
@@ -18,7 +20,9 @@ Provisions Grafana datasources, dashboards, and alert rules for PerformanceMonit
    rendering that hides filtered-out instances. Older/toggle-off Grafana keeps the v1 import.
    `perfmon_fleet_static` skips this entirely - only the static (v1) fleet file is generated.
 4. Provisions Grafana Unified Alerting rule groups per SQL Server instance via the Grafana
-   Provisioning API, scoped to that instance's datasource UID.
+   Provisioning API, scoped to that instance's datasource UID. Rule groups are shared by name
+   across instances, so each run merges its own instances' rules into the group rather than
+   replacing it.
 5. Provisions contact points (email, Slack, PagerDuty, or webhook) via the Grafana Provisioning API
    when a delivery backend is configured. Contact points not referenced by any variable are removed.
 6. Provisions mute timings listed in `perfmon_alert_mute_timings` via the Grafana Provisioning API.
@@ -54,13 +58,13 @@ The role runs on the Grafana host:
 Run it:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml
 ```
 
 Or run the full end-to-end playbook:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/main.yml
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/main.yml
 ```
 
 ### Tag-based targeting
@@ -69,16 +73,16 @@ Use tags to run specific operations without executing the full role:
 
 ```bash
 # Regenerate dashboard JSON files only
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags generate
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags generate
 
 # Generate and import dashboards
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags dashboards
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags dashboards
 
 # Provision datasources only
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags datasources
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags datasources
 
 # Provision alerting resources only
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags alerting
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags alerting
 ```
 
 Available tags:
@@ -129,6 +133,9 @@ sql_servers:
       ds_port: 1433
 ```
 
+`ds_host`/`ds_port` default to `ansible_host`/`mssql_port` when omitted - only set them when the two
+addresses genuinely differ.
+
 ### Required credentials
 
 `grafana_api_key` and `perfmon_reader_password` have no role defaults and must be supplied. The recommended way is Ansible Vault:
@@ -162,6 +169,7 @@ Create the service account in the Grafana UI (Administration -> Service accounts
 | `perfmon_reader_windows_upn` | - | Required when the resolved auth mode is `windows`. AD principal in UPN form (`user@REALM`) for the datasource login - see Windows/AD authentication. |
 | `perfmon_reader_windows_password` | - | Required when the resolved auth mode is `windows`. The AD principal's domain password. Supply via vault. |
 | `grafana_krb5_conf_path` | `/etc/krb5.conf` | Path *on the Grafana host* to a Kerberos client config pointing at the domain's KDC. Only used when the resolved auth mode is `windows`. This role does not author or manage `krb5.conf`. |
+| `perfmon_prune_orphaned` | `false` | Delete datasources, mute timings, and alert rules that exist in Grafana but belong to an instance not in this run's `perfmon_instances`. Off by default so a run against a partial inventory never deletes another instance's resources. Only set `true` for a run whose inventory is the complete, current fleet - see Retiring an instance. |
 
 ### Alert threshold variables
 
@@ -197,7 +205,7 @@ match the upstream `UserPreferences.cs` grouping cadence.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `perfmon_alert_mute_timings` | `[]` | List of Grafana mute timing objects to provision. Each entry must have a `name` (use `perfmon-` prefix) and `time_intervals`. On every `alerting` tag run, timings with a `perfmon-` prefix that are no longer in this list are removed automatically. |
+| `perfmon_alert_mute_timings` | `[]` | List of Grafana mute timing objects to provision. Each entry must have a `name` (use `perfmon-` prefix) and `time_intervals`. When `perfmon_prune_orphaned` is set, timings with a `perfmon-` prefix that are no longer in this list are removed. |
 
 ### Alert contact point variables
 
@@ -307,8 +315,8 @@ perfmon_alert_mute_timings:
 ```
 
 Name each mute timing with a `perfmon-` prefix to avoid colliding with timings owned by other teams.
-On every `alerting` tag run the role reconciles orphans: any `perfmon-` timing no longer in this
-list is deleted automatically.
+With `perfmon_prune_orphaned` set, an `alerting` tag run removes any `perfmon-` timing no longer in
+this list.
 
 ### Notification policy
 
@@ -330,7 +338,7 @@ intentionally offline should be removed from inventory to avoid persistent Error
 Remove everything this role has provisioned from a Grafana instance:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown
 ```
 
 Teardown order: notification policy route, mute timings, contact points, datasources, folder
@@ -339,18 +347,31 @@ Teardown order: notification policy route, mute timings, contact points, datasou
 Use sub-tags for selective removal:
 
 ```bash
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_alerting
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_datasources
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_dashboards
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_alerting
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_datasources
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml --tags teardown_dashboards
 ```
 
 ### Retiring an instance
 
-Remove the host from inventory and re-run the full playbook (or
-`--tags datasources,alerting`). The `datasources` tag reconciles orphaned datasources
-automatically - any `perfmon-ds-` datasource no longer in `perfmon_instances` is deleted,
-so the fleet dashboard dropdown updates on the next browser refresh. The `alerting` tag
-re-provisions all rule groups from the reduced inventory, removing the retired host's rules.
+Remove the host from inventory and re-run with `perfmon_prune_orphaned=true` (full playbook, or
+`--tags datasources,alerting`), using an inventory that's the complete, current fleet - not a
+partial one:
+
+```bash
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/deploy_perfmon_grafana.yml \
+  --tags datasources,alerting -e perfmon_prune_orphaned=true
+```
+
+The `datasources` tag deletes any `perfmon-ds-` datasource no longer in `perfmon_instances`, so the
+fleet dashboard dropdown updates on the next browser refresh. The `alerting` tag drops the retired
+host's rules from each shared rule group. Without `perfmon_prune_orphaned`, both resources are left
+in place - a run against a partial inventory has no way to distinguish "this instance was retired"
+from "this instance just isn't in this particular run's scope".
+
+If an inventory is accidentally omitted from a run, nothing is lost: re-run against the full fleet
+and every datasource and alert rule is recreated. Data collection isn't affected either way - the
+role only ever touches Grafana's own state, never the PerformanceMonitor database itself.
 
 
 ## Connection strings
